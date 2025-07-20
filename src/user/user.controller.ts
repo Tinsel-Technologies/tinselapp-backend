@@ -19,6 +19,7 @@ import {
   UpdateUsernameDto,
   UpdatePasswordDto,
   VerifyPasswordDto,
+  CheckUsernameDto,
 } from './dto/user.dto';
 
 @Controller('/api/v1/user')
@@ -52,7 +53,7 @@ export class UserController {
 
   @Put('/:userId/username')
   @HttpCode(HttpStatus.OK)
-  updateUsername(
+  async updateUsername(
     @Param('userId') userId: string,
     @Body() updateUsernameDto: UpdateUsernameDto,
   ) {
@@ -61,6 +62,17 @@ export class UserController {
     }
     if (!updateUsernameDto.username) {
       throw new BadRequestException('Username is required');
+    }
+
+    const availabilityCheck = await this.userService.checkUsernameAvailability(
+      updateUsernameDto.username,
+    );
+
+    if (!availabilityCheck.available) {
+      throw new BadRequestException({
+        message: 'Username is already taken',
+        suggestions: availabilityCheck.suggestions,
+      });
     }
     return this.userService.editUsername(userId, updateUsernameDto.username);
   }
@@ -115,5 +127,13 @@ export class UserController {
       throw new BadRequestException('At least one metadata field is required');
     }
     return this.userService.updateUserMetadata(userId, updateMetadataDto);
+  }
+
+  @Post('checkUsername')
+  @HttpCode(HttpStatus.OK)
+  checkUsernameAvailability(@Body() checkUsernameDto: CheckUsernameDto) {
+    return this.userService.checkUsernameAvailability(
+      checkUsernameDto.username,
+    );
   }
 }
