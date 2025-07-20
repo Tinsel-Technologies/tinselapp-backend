@@ -67,6 +67,7 @@ export class UserService {
         publicMetadata: {
           location: params.location,
           dateOfBirth: params.dateOfBirth,
+          gender: params.gender,
         },
       });
     } catch (error) {

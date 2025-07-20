@@ -21,7 +21,6 @@ import {
   VerifyPasswordDto,
 } from './dto/user.dto';
 
-
 @Controller('/api/v1/user')
 @UseGuards(AuthGuardService)
 export class UserController {
@@ -108,10 +107,12 @@ export class UserController {
     if (!userId) {
       throw new BadRequestException('User ID is required');
     }
-    if (!updateMetadataDto.location && !updateMetadataDto.dateOfBirth) {
-      throw new BadRequestException(
-        'At least one metadata field is required',
-      );
+    if (
+      !updateMetadataDto.location &&
+      !updateMetadataDto.dateOfBirth &&
+      !updateMetadataDto.gender
+    ) {
+      throw new BadRequestException('At least one metadata field is required');
     }
     return this.userService.updateUserMetadata(userId, updateMetadataDto);
   }
