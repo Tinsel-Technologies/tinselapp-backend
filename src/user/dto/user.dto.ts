@@ -38,7 +38,6 @@ export class UserParamsDto {
   userId: string;
 }
 
-
 export class AddToChatListDto {
   @IsString()
   @IsNotEmpty()
