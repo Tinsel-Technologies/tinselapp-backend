@@ -2,12 +2,11 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
-  Injectable,
   Param,
-  PipeTransform,
   Post,
   Put,
   Query,
@@ -20,6 +19,10 @@ import {
   UpdatePasswordDto,
   VerifyPasswordDto,
   CheckUsernameDto,
+  UserParamsDto,
+  RemoveFromChatListDto,
+  CheckChatListDto,
+  AddToChatListDto,
 } from './dto/user.dto';
 
 @Controller('/api/v1/user')
@@ -135,5 +138,86 @@ export class UserController {
     return this.userService.checkUsernameAvailability(
       checkUsernameDto.username,
     );
+  }
+
+  @Get('/:userId/suggestUsername')
+  @HttpCode(HttpStatus.OK)
+  suggestUsername(@Param() params: UserParamsDto) {
+    return this.userService.suggestUsername(params.userId);
+  }
+
+  @Post('/:userId/chatlist/add')
+  @HttpCode(HttpStatus.OK)
+  addToChatList(
+    @Param('userId') userId: string,
+    @Body() addToChatListDto: AddToChatListDto,
+  ) {
+    if (!userId) {
+      throw new BadRequestException('User ID is required');
+    }
+    if (!addToChatListDto.targetUsername) {
+      throw new BadRequestException('Target username is required');
+    }
+    return this.userService.addToChatListByUsername(
+      userId,
+      addToChatListDto.targetUsername,
+    );
+  }
+
+  @Delete('/:userId/chatlist/remove')
+  @HttpCode(HttpStatus.OK)
+  removeFromChatList(
+    @Param('userId') userId: string,
+    @Body() removeFromChatListDto: RemoveFromChatListDto,
+  ) {
+    if (!userId) {
+      throw new BadRequestException('User ID is required');
+    }
+    if (!removeFromChatListDto.targetUsername) {
+      throw new BadRequestException('Target username is required');
+    }
+    return this.userService.removeFromChatListByUsername(
+      userId,
+      removeFromChatListDto.targetUsername,
+    );
+  }
+
+  @Get('/:userId/chatList')
+  @HttpCode(HttpStatus.OK)
+  getChatList(@Param('userId') userId: string) {
+    if (!userId) {
+      throw new BadRequestException('User ID is required');
+    }
+    return this.userService.getChatList(userId);
+  }
+
+  @Post('/:userId/chatlist/check')
+  @HttpCode(HttpStatus.OK)
+  async checkIfInChatList(
+    @Param('userId') userId: string,
+    @Body() checkChatListDto: CheckChatListDto,
+  ) {
+    if (!userId) {
+      throw new BadRequestException('User ID is required');
+    }
+    if (!checkChatListDto.targetUsername) {
+      throw new BadRequestException('Target username is required');
+    }
+
+    const isInList = await this.userService.isInChatListByUsername(
+      userId,
+      checkChatListDto.targetUsername,
+    );
+
+    return { isInChatList: isInList };
+  }
+
+  @Delete('/:userId/chatList/clear')
+  @HttpCode(HttpStatus.OK)
+  clearChatList(@Param('userId') userId: string) {
+    if (!userId) {
+      throw new BadRequestException('User ID is required');
+    }
+    return this.userService.clearChatList(userId);
   }
 }

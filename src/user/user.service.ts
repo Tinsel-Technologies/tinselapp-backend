@@ -4,6 +4,7 @@ import {
   BadRequestException,
   Injectable,
   InternalServerErrorException,
+  NotFoundException,
 } from '@nestjs/common';
 
 @Injectable()
@@ -175,6 +176,375 @@ export class UserService {
       });
       return existingUsers.data.length === 0;
     } catch (error) {
+      return false;
+    }
+  }
+
+  async suggestUsername(userId: string): Promise<{ suggestions: string[] }> {
+    try {
+      const user = await this.getUser(userId);
+
+      if (!user.firstName || !user.lastName) {
+        throw new BadRequestException(
+          'User must have both first name and last name to generate suggestions',
+        );
+      }
+
+      const firstName = user.firstName.toLowerCase().trim();
+      const lastName = user.lastName.toLowerCase().trim();
+
+      const suggestions = await this.generateUsernameFromName(
+        firstName,
+        lastName,
+      );
+
+      return { suggestions };
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        'Failed to generate username suggestions',
+      );
+    }
+  }
+
+  private async generateUsernameFromName(
+    firstName: string,
+    lastName: string,
+  ): Promise<string[]> {
+    const suggestions: string[] = [];
+    const maxSuggestions = 8;
+
+    try {
+      const basePatterns = [
+        `${firstName}${lastName}`,
+        `${firstName}_${lastName}`,
+        `${firstName}.${lastName}`,
+        `${firstName}${lastName.charAt(0)}`,
+        `${firstName.charAt(0)}${lastName}`,
+      ];
+
+      for (const base of basePatterns) {
+        if (suggestions.length >= maxSuggestions) break;
+        const isAvailable = await this.isUsernameAvailable(base);
+        if (isAvailable) {
+          suggestions.push(base);
+        }
+      }
+
+      for (const base of basePatterns) {
+        if (suggestions.length >= maxSuggestions) break;
+        for (let i = 1; i <= 99 && suggestions.length < maxSuggestions; i++) {
+          const suggestion = `${base}${i}`;
+          const isAvailable = await this.isUsernameAvailable(suggestion);
+          if (isAvailable) {
+            suggestions.push(suggestion);
+          }
+        }
+      }
+
+      for (const base of basePatterns.slice(0, 2)) {
+        if (suggestions.length >= maxSuggestions) break;
+
+        for (let i = 1; i <= 50 && suggestions.length < maxSuggestions; i++) {
+          const suggestion = `${base}_${i}`;
+          const isAvailable = await this.isUsernameAvailable(suggestion);
+          if (isAvailable) {
+            suggestions.push(suggestion);
+          }
+        }
+      }
+
+      if (suggestions.length < maxSuggestions) {
+        const primaryBase = `${firstName}${lastName}`;
+        for (let i = 0; i < 20 && suggestions.length < maxSuggestions; i++) {
+          const randomNum = Math.floor(Math.random() * 9999) + 100;
+          const patterns = [
+            `${primaryBase}${randomNum}`,
+            `${firstName}_${lastName}_${randomNum}`,
+            `${firstName}${randomNum}`,
+          ];
+
+          for (const pattern of patterns) {
+            if (suggestions.length >= maxSuggestions) break;
+
+            const isAvailable = await this.isUsernameAvailable(pattern);
+            if (isAvailable && !suggestions.includes(pattern)) {
+              suggestions.push(pattern);
+            }
+          }
+        }
+      }
+
+      return suggestions.slice(0, maxSuggestions);
+    } catch (error) {
+      const fallback = [
+        `${firstName}${lastName}1`,
+        `${firstName}_${lastName}`,
+        `${firstName}${lastName}${Math.floor(Math.random() * 999) + 1}`,
+        `${firstName}_${lastName}_1`,
+      ];
+      return fallback;
+    }
+  }
+
+  async addToChatList(
+    userId: string,
+    targetUserId: string,
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      // Validate that both users exist
+      const [user, targetUser] = await Promise.all([
+        this.getUser(userId),
+        this.getUser(targetUserId),
+      ]);
+
+      if (!user || !targetUser) {
+        throw new NotFoundException('One or both users not found');
+      }
+
+      if (userId === targetUserId) {
+        throw new BadRequestException('Cannot add yourself to chat list');
+      }
+      const chatListData = this.getChatListData(user);
+      if (chatListData.chatList.includes(targetUserId)) {
+        return { success: false, message: 'User already in chat list' };
+      }
+      chatListData.chatList.push(targetUserId);
+      await this.updateChatListData(userId, chatListData);
+      return { success: true, message: 'User added to chat list' };
+    } catch (error) {
+      if (
+        error instanceof BadRequestException ||
+        error instanceof NotFoundException
+      ) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to add user to chat list');
+    }
+  }
+
+  async removeFromChatList(
+    userId: string,
+    targetUserId: string,
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      const user = await this.getUser(userId);
+      const chatListData = this.getChatListData(user);
+      if (!chatListData.chatList.includes(targetUserId)) {
+        return { success: false, message: 'User not in chat list' };
+      }
+
+      chatListData.chatList = chatListData.chatList.filter(
+        (id) => id !== targetUserId,
+      );
+      await this.updateChatListData(userId, chatListData);
+
+      return { success: true, message: 'User removed from chat list' };
+    } catch (error) {
+      throw new InternalServerErrorException(
+        'Failed to remove user from chat list',
+      );
+    }
+  }
+
+  async getChatList(userId: string): Promise<User[]> {
+    try {
+      const user = await this.getUser(userId);
+      const chatListData = this.getChatListData(user);
+
+      if (chatListData.chatList.length === 0) {
+        return [];
+      }
+
+      const chatUsers = await Promise.all(
+        chatListData.chatList.map(async (chatUserId) => {
+          try {
+            return await this.getUser(chatUserId);
+          } catch (error) {
+            return null;
+          }
+        }),
+      );
+
+      const validChatUsers = chatUsers.filter(
+        (user) => user !== null,
+      ) as User[];
+      if (validChatUsers.length !== chatListData.chatList.length) {
+        chatListData.chatList = validChatUsers.map((user) => user.id);
+        await this.updateChatListData(userId, chatListData);
+      }
+
+      return validChatUsers;
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to fetch chat list');
+    }
+  }
+
+  async isInChatList(userId: string, targetUserId: string): Promise<boolean> {
+    try {
+      const user = await this.getUser(userId);
+      const chatListData = this.getChatListData(user);
+      return chatListData.chatList.includes(targetUserId);
+    } catch (error) {
+      return false;
+    }
+  }
+
+  async getChatListCount(userId: string): Promise<number> {
+    try {
+      const user = await this.getUser(userId);
+      const chatListData = this.getChatListData(user);
+      return chatListData.chatList.length;
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to fetch chat list count');
+    }
+  }
+
+  async clearChatList(
+    userId: string,
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      const user = await this.getUser(userId);
+      const chatListData = this.getChatListData(user);
+
+      if (chatListData.chatList.length === 0) {
+        return { success: false, message: 'Chat list is already empty' };
+      }
+
+      chatListData.chatList = [];
+      await this.updateChatListData(userId, chatListData);
+
+      return { success: true, message: 'Chat list cleared successfully' };
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to clear chat list');
+    }
+  }
+
+  private getChatListData(user: User): ChatListData {
+    const metadata = (user.publicMetadata as any) || {};
+    return {
+      chatList: Array.isArray(metadata.chatList) ? metadata.chatList : [],
+    };
+  }
+
+  private async updateChatListData(
+    userId: string,
+    chatListData: ChatListData,
+  ): Promise<void> {
+    try {
+      const user = await this.getUser(userId);
+      const currentMetadata = (user.publicMetadata as any) || {};
+      await clerkClient.users.updateUserMetadata(userId, {
+        publicMetadata: {
+          ...currentMetadata,
+          chatList: chatListData.chatList,
+        },
+      });
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to update chat list data');
+    }
+  }
+
+  async updateUserProfile(
+    userId: string,
+    params: UpdateUserMetadataParams,
+  ): Promise<User> {
+    try {
+      const user = await this.getUser(userId);
+      const currentMetadata = (user.publicMetadata as any) || {};
+
+      return clerkClient.users.updateUserMetadata(userId, {
+        publicMetadata: {
+          ...currentMetadata,
+          username: params.username,
+          location: params.location,
+          gender: params.gender,
+          dateOfBirth: params.dateOfBirth,
+        },
+      });
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to update user profile');
+    }
+  }
+
+  async getUserByUsername(username: string): Promise<User> {
+    try {
+      const users = await clerkClient.users.getUserList({
+        username: [username],
+      });
+
+      if (users.data.length === 0) {
+        throw new NotFoundException(
+          `User with username '${username}' not found`,
+        );
+      }
+
+      return users.data[0];
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        'Failed to fetch user by username',
+      );
+    }
+  }
+
+  // Updated chat list methods in UserService
+  async addToChatListByUsername(
+    userId: string,
+    targetUsername: string,
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      // Get target user by username
+      const targetUser = await this.getUserByUsername(targetUsername);
+
+      // Use the existing addToChatList method with the found user ID
+      return await this.addToChatList(userId, targetUser.id);
+    } catch (error) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to add user to chat list');
+    }
+  }
+
+  async removeFromChatListByUsername(
+    userId: string,
+    targetUsername: string,
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      const targetUser = await this.getUserByUsername(targetUsername);
+      return await this.removeFromChatList(userId, targetUser.id);
+    } catch (error) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        'Failed to remove user from chat list',
+      );
+    }
+  }
+
+  async isInChatListByUsername(
+    userId: string,
+    targetUsername: string,
+  ): Promise<boolean> {
+    try {
+      const targetUser = await this.getUserByUsername(targetUsername);
+      return await this.isInChatList(userId, targetUser.id);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        return false;
+      }
       return false;
     }
   }

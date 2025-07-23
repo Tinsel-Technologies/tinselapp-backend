@@ -1,15 +1,15 @@
 interface UpdateUserMetadataParams {
-  location: string;
+  username: string;
+  location?: string;
   gender: string;
-  dateOfBirth: Date;
+  dateOfBirth: string;
 }
 
 interface SearchUsersParams {
   location?: string;
-  orderBy?:
-    | 'created_at'
-    | 'updated_at'
-    | 'last_active_at'
-    | 'last_sign_in_at';
+  orderBy?: 'created_at' | 'updated_at' | 'last_active_at' | 'last_sign_in_at';
 }
 
+interface ChatListData {
+  chatList: string[];
+}

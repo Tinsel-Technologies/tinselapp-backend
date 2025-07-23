@@ -31,3 +31,37 @@ export class CheckUsernameDto {
   @Transform(({ value }) => value?.trim().toLowerCase())
   username: string;
 }
+
+export class UserParamsDto {
+  @IsString()
+  @IsNotEmpty()
+  userId: string;
+}
+
+
+export class AddToChatListDto {
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(3)
+  @MaxLength(30)
+  @Transform(({ value }) => value?.trim())
+  targetUsername: string;
+}
+
+export class RemoveFromChatListDto {
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(3)
+  @MaxLength(30)
+  @Transform(({ value }) => value?.trim())
+  targetUsername: string;
+}
+
+export class CheckChatListDto {
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(3)
+  @MaxLength(30)
+  @Transform(({ value }) => value?.trim())
+  targetUsername: string;
+}
