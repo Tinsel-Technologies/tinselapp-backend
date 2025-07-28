@@ -56,6 +56,7 @@ export class RemoveFromChatListDto {
   targetUsername: string;
 }
 
+
 export class CheckChatListDto {
   @IsString()
   @IsNotEmpty()
