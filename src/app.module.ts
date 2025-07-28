@@ -6,10 +6,12 @@ import { AuthGuardService } from './auth-guard/auth-guard.service';
 import { UserService } from './user/user.service';
 import { UserController } from './user/user.controller';
 import { ConfigModule } from '@nestjs/config';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
 
 @Module({
   imports: [ConfigModule.forRoot(), AuthGuardModule],
-  controllers: [UserController],
-  providers: [AuthGuardService, UserService, ClerkClientProvider],
+  controllers: [UserController, AppController],
+  providers: [AuthGuardService, UserService, ClerkClientProvider,AppService],
 })
 export class AppModule {}
