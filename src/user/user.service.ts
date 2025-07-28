@@ -492,16 +492,12 @@ export class UserService {
     }
   }
 
-  // Updated chat list methods in UserService
   async addToChatListByUsername(
     userId: string,
     targetUsername: string,
   ): Promise<{ success: boolean; message: string }> {
     try {
-      // Get target user by username
       const targetUser = await this.getUserByUsername(targetUsername);
-
-      // Use the existing addToChatList method with the found user ID
       return await this.addToChatList(userId, targetUser.id);
     } catch (error) {
       if (
@@ -533,6 +529,7 @@ export class UserService {
       );
     }
   }
+
 
   async isInChatListByUsername(
     userId: string,
