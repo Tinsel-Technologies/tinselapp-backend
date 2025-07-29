@@ -64,8 +64,11 @@ export class UserService {
     params: UpdateUserMetadataParams,
   ): Promise<User> {
     try {
+      const user = await this.getUser(userId);
+      const currentMetadata = (user.publicMetadata as any) || {};
       return clerkClient.users.updateUserMetadata(userId, {
         publicMetadata: {
+          ...currentMetadata,
           location: params.location,
           dateOfBirth: params.dateOfBirth,
           gender: params.gender,
@@ -306,12 +309,22 @@ export class UserService {
       if (userId === targetUserId) {
         throw new BadRequestException('Cannot add yourself to chat list');
       }
-      const chatListData = this.getChatListData(user);
-      if (chatListData.chatList.includes(targetUserId)) {
+
+      const currentMetadata = (user.publicMetadata as any) || {};
+      const chatList = currentMetadata.chatList || [];
+
+      if (chatList.includes(targetUserId)) {
         return { success: false, message: 'User already in chat list' };
       }
-      chatListData.chatList.push(targetUserId);
-      await this.updateChatListData(userId, chatListData);
+
+      const updatedChatList = [...chatList, targetUserId];
+      await clerkClient.users.updateUserMetadata(userId, {
+        publicMetadata: {
+          ...currentMetadata,
+          chatList: updatedChatList,
+        },
+      });
+
       return { success: true, message: 'User added to chat list' };
     } catch (error) {
       if (
@@ -330,14 +343,24 @@ export class UserService {
   ): Promise<{ success: boolean; message: string }> {
     try {
       const user = await this.getUser(userId);
-      const chatListData = this.getChatListData(user);
-      if (!chatListData.chatList.includes(targetUserId)) {
+      const currentMetadata = (user.publicMetadata as any) || {};
+      const chatList = currentMetadata.chatList || [];
+
+      if (!chatList.includes(targetUserId)) {
         return { success: false, message: 'User not in chat list' };
       }
-      chatListData.chatList = chatListData.chatList.filter(
-        (id) => id !== targetUserId,
+
+      const updatedChatList = chatList.filter(
+        (id: string) => id !== targetUserId,
       );
-      await this.updateChatListData(userId, chatListData);
+
+      await clerkClient.users.updateUserMetadata(userId, {
+        publicMetadata: {
+          ...currentMetadata,
+          chatList: updatedChatList,
+        },
+      });
+
       return { success: true, message: 'User removed from chat list' };
     } catch (error) {
       throw new InternalServerErrorException(
@@ -346,17 +369,21 @@ export class UserService {
     }
   }
 
+  /**
+   * Get user's chat list with user details
+   */
   async getChatList(userId: string): Promise<User[]> {
     try {
       const user = await this.getUser(userId);
-      const chatListData = this.getChatListData(user);
+      const currentMetadata = (user.publicMetadata as any) || {};
+      const chatList = currentMetadata.chatList || [];
 
-      if (chatListData.chatList.length === 0) {
+      if (chatList.length === 0) {
         return [];
       }
 
       const chatUsers = await Promise.all(
-        chatListData.chatList.map(async (chatUserId) => {
+        chatList.map(async (chatUserId: string) => {
           try {
             return await this.getUser(chatUserId);
           } catch (error) {
@@ -364,12 +391,18 @@ export class UserService {
           }
         }),
       );
+
       const validChatUsers = chatUsers.filter(
         (user) => user !== null,
       ) as User[];
-      if (validChatUsers.length !== chatListData.chatList.length) {
-        chatListData.chatList = validChatUsers.map((user) => user.id);
-        await this.updateChatListData(userId, chatListData);
+      if (validChatUsers.length !== chatList.length) {
+        const validUserIds = validChatUsers.map((user) => user.id);
+        await clerkClient.users.updateUserMetadata(userId, {
+          publicMetadata: {
+            ...currentMetadata,
+            chatList: validUserIds,
+          },
+        });
       }
 
       return validChatUsers;
@@ -381,8 +414,9 @@ export class UserService {
   async isInChatList(userId: string, targetUserId: string): Promise<boolean> {
     try {
       const user = await this.getUser(userId);
-      const chatListData = this.getChatListData(user);
-      return chatListData.chatList.includes(targetUserId);
+      const currentMetadata = (user.publicMetadata as any) || {};
+      const chatList = currentMetadata.chatList || [];
+      return chatList.includes(targetUserId);
     } catch (error) {
       return false;
     }
@@ -391,8 +425,9 @@ export class UserService {
   async getChatListCount(userId: string): Promise<number> {
     try {
       const user = await this.getUser(userId);
-      const chatListData = this.getChatListData(user);
-      return chatListData.chatList.length;
+      const currentMetadata = (user.publicMetadata as any) || {};
+      const chatList = currentMetadata.chatList || [];
+      return chatList.length;
     } catch (error) {
       throw new InternalServerErrorException('Failed to fetch chat list count');
     }
@@ -403,14 +438,18 @@ export class UserService {
   ): Promise<{ success: boolean; message: string }> {
     try {
       const user = await this.getUser(userId);
-      const chatListData = this.getChatListData(user);
+      const currentMetadata = (user.publicMetadata as any) || {};
+      const chatList = currentMetadata.chatList || [];
 
-      if (chatListData.chatList.length === 0) {
+      if (chatList.length === 0) {
         return { success: false, message: 'Chat list is already empty' };
       }
-
-      chatListData.chatList = [];
-      await this.updateChatListData(userId, chatListData);
+      await clerkClient.users.updateUserMetadata(userId, {
+        publicMetadata: {
+          ...currentMetadata,
+          chatList: [],
+        },
+      });
 
       return { success: true, message: 'Chat list cleared successfully' };
     } catch (error) {
@@ -418,25 +457,188 @@ export class UserService {
     }
   }
 
-  private getChatListData(user: User): ChatListData {
-    const metadata = (user.publicMetadata as any) || {};
-    return {
-      chatList: metadata.chatList || [],
-    };
-  }
-
-  private async updateChatListData(
+  async suggestUsers(
     userId: string,
-    chatListData: ChatListData,
-  ): Promise<void> {
-    const user = await this.getUser(userId);
-    const existingMetadata = (user.publicMetadata as any) || {};
+    limit: number = 9,
+  ): Promise<{
+    suggestions: User[];
+    breakdown: { females: number; males: number };
+  }> {
+    try {
+      const currentUser = await this.getUser(userId);
+      const currentUserMetadata = (currentUser.publicMetadata as any) || {};
+      const chatList = currentUserMetadata.chatList || [];
 
-    await clerkClient.users.updateUserMetadata(userId, {
-      publicMetadata: {
-        ...existingMetadata,
-        chatList: chatListData.chatList,
-      },
-    });
+      const femalesNeeded = Math.ceil(limit / 3);
+      const malesNeeded = limit - femalesNeeded;
+
+      const allUsers = await clerkClient.users.getUserList({
+        orderBy: '-last_active_at',
+        limit: 500,
+      });
+
+      const availableUsers = allUsers.data.filter((user) => {
+        if (user.id === userId || chatList.includes(user.id)) {
+          return false;
+        }
+
+        const userMetadata = (user.publicMetadata as any) || {};
+        return (
+          userMetadata.gender === 'male' || userMetadata.gender === 'female'
+        );
+      });
+
+      const femaleUsers = availableUsers.filter((user) => {
+        const userMetadata = (user.publicMetadata as any) || {};
+        return userMetadata.gender === 'female';
+      });
+
+      const maleUsers = availableUsers.filter((user) => {
+        const userMetadata = (user.publicMetadata as any) || {};
+        return userMetadata.gender === 'male';
+      });
+
+      const shuffledFemales = this.shuffleArray([...femaleUsers]);
+      const shuffledMales = this.shuffleArray([...maleUsers]);
+
+      const selectedFemales = shuffledFemales.slice(0, femalesNeeded);
+      const selectedMales = shuffledMales.slice(0, malesNeeded);
+
+      const suggestions = this.shuffleArray([
+        ...selectedFemales,
+        ...selectedMales,
+      ]);
+
+      return {
+        suggestions,
+        breakdown: {
+          females: selectedFemales.length,
+          males: selectedMales.length,
+        },
+      };
+    } catch (error) {
+      throw new InternalServerErrorException(
+        'Failed to generate user suggestions',
+      );
+    }
   }
+
+  private shuffleArray<T>(array: T[]): T[] {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  }
+
+
+async getAllChatListUsers(userId: string): Promise<{
+  chatList: User[];
+  count: number;
+  breakdown: { females: number; males: number; unknown: number };
+}> {
+  try {
+    const user = await this.getUser(userId);
+    const currentMetadata = user.publicMetadata as any || {};
+    const chatListIds = currentMetadata.chatList || [];
+
+    if (chatListIds.length === 0) {
+      return {
+        chatList: [],
+        count: 0,
+        breakdown: { females: 0, males: 0, unknown: 0 },
+      };
+    }
+
+    const chatUsers = await Promise.all(
+      chatListIds.map(async (chatUserId: string) => {
+        try {
+          return await this.getUser(chatUserId);
+        } catch (error) {
+          return null;
+        }
+      })
+    );
+    const validChatUsers = chatUsers.filter(user => user !== null) as User[];
+    
+    if (validChatUsers.length !== chatListIds.length) {
+      const validUserIds = validChatUsers.map(user => user.id);
+      await clerkClient.users.updateUserMetadata(userId, {
+        publicMetadata: {
+          ...currentMetadata,
+          chatList: validUserIds,
+        },
+      });
+    }
+
+    const breakdown = validChatUsers.reduce(
+      (acc, user) => {
+        const userMetadata = user.publicMetadata as any || {};
+        const gender = userMetadata.gender;
+        
+        if (gender === 'female') {
+          acc.females++;
+        } else if (gender === 'male') {
+          acc.males++;
+        } else {
+          acc.unknown++;
+        }
+        
+        return acc;
+      },
+      { females: 0, males: 0, unknown: 0 }
+    );
+
+    return {
+      chatList: validChatUsers,
+      count: validChatUsers.length,
+      breakdown,
+    };
+  } catch (error) {
+    throw new InternalServerErrorException('Failed to fetch chat list users');
+  }
+}
+
+
+async getChatListUsersPaginated(
+  userId: string,
+  page: number = 1,
+  limit: number = 10,
+): Promise<{
+  chatList: User[];
+  pagination: {
+    currentPage: number;
+    totalPages: number;
+    totalUsers: number;
+    hasNext: boolean;
+    hasPrev: boolean;
+  };
+  breakdown: { females: number; males: number; unknown: number };
+}> {
+  try {
+    const allChatData = await this.getAllChatListUsers(userId);
+    
+    const totalUsers = allChatData.count;
+    const totalPages = Math.ceil(totalUsers / limit);
+    const startIndex = (page - 1) * limit;
+    const endIndex = startIndex + limit;
+    
+    const paginatedUsers = allChatData.chatList.slice(startIndex, endIndex);
+    
+    return {
+      chatList: paginatedUsers,
+      pagination: {
+        currentPage: page,
+        totalPages,
+        totalUsers,
+        hasNext: page < totalPages,
+        hasPrev: page > 1,
+      },
+      breakdown: allChatData.breakdown,
+    };
+  } catch (error) {
+    throw new InternalServerErrorException('Failed to fetch paginated chat list');
+  }
+}
 }

@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, MinLength, MaxLength } from 'class-validator';
+import { IsString, IsNotEmpty, MinLength, MaxLength, IsOptional, IsNumber, Min, Max } from 'class-validator';
 import { Transform } from 'class-transformer';
 
 export class UpdateUsernameDto {
@@ -41,27 +41,41 @@ export class UserParamsDto {
 export class AddToChatListDto {
   @IsString()
   @IsNotEmpty()
-  @MinLength(3)
-  @MaxLength(30)
-  @Transform(({ value }) => value?.trim())
-  targetUsername: string;
+  targetUserId: string;
 }
 
 export class RemoveFromChatListDto {
   @IsString()
   @IsNotEmpty()
-  @MinLength(3)
-  @MaxLength(30)
-  @Transform(({ value }) => value?.trim())
-  targetUsername: string;
+  targetUserId: string;
 }
-
 
 export class CheckChatListDto {
   @IsString()
   @IsNotEmpty()
-  @MinLength(3)
-  @MaxLength(30)
-  @Transform(({ value }) => value?.trim())
-  targetUsername: string;
+  targetUserId: string;
+}
+
+export class SuggestUsersDto {
+  @IsOptional()
+  @Transform(({ value }) => parseInt(value))
+  @IsNumber()
+  @Min(3)
+  @Max(30)
+  limit?: number = 9;
+}
+
+export class GetChatListDto {
+  @IsOptional()
+  @Transform(({ value }) => parseInt(value))
+  @IsNumber()
+  @Min(1)
+  page?: number = 1;
+
+  @IsOptional()
+  @Transform(({ value }) => parseInt(value))
+  @IsNumber()
+  @Min(1)
+  @Max(50)
+  limit?: number = 10;
 }
