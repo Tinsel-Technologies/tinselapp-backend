@@ -294,7 +294,6 @@ export class UserService {
     targetUserId: string,
   ): Promise<{ success: boolean; message: string }> {
     try {
-      // Validate that both users exist
       const [user, targetUser] = await Promise.all([
         this.getUser(userId),
         this.getUser(targetUserId),
@@ -335,12 +334,10 @@ export class UserService {
       if (!chatListData.chatList.includes(targetUserId)) {
         return { success: false, message: 'User not in chat list' };
       }
-
       chatListData.chatList = chatListData.chatList.filter(
         (id) => id !== targetUserId,
       );
       await this.updateChatListData(userId, chatListData);
-
       return { success: true, message: 'User removed from chat list' };
     } catch (error) {
       throw new InternalServerErrorException(
@@ -367,7 +364,6 @@ export class UserService {
           }
         }),
       );
-
       const validChatUsers = chatUsers.filter(
         (user) => user !== null,
       ) as User[];
@@ -425,7 +421,7 @@ export class UserService {
   private getChatListData(user: User): ChatListData {
     const metadata = (user.publicMetadata as any) || {};
     return {
-      chatList: Array.isArray(metadata.chatList) ? metadata.chatList : [],
+      chatList: metadata.chatList || [],
     };
   }
 
@@ -433,116 +429,14 @@ export class UserService {
     userId: string,
     chatListData: ChatListData,
   ): Promise<void> {
-    try {
-      const user = await this.getUser(userId);
-      const currentMetadata = (user.publicMetadata as any) || {};
-      await clerkClient.users.updateUserMetadata(userId, {
-        publicMetadata: {
-          ...currentMetadata,
-          chatList: chatListData.chatList,
-        },
-      });
-    } catch (error) {
-      throw new InternalServerErrorException('Failed to update chat list data');
-    }
-  }
+    const user = await this.getUser(userId);
+    const existingMetadata = (user.publicMetadata as any) || {};
 
-  async updateUserProfile(
-    userId: string,
-    params: UpdateUserMetadataParams,
-  ): Promise<User> {
-    try {
-      const user = await this.getUser(userId);
-      const currentMetadata = (user.publicMetadata as any) || {};
-
-      return clerkClient.users.updateUserMetadata(userId, {
-        publicMetadata: {
-          ...currentMetadata,
-          username: params.username,
-          location: params.location,
-          gender: params.gender,
-          dateOfBirth: params.dateOfBirth,
-        },
-      });
-    } catch (error) {
-      throw new InternalServerErrorException('Failed to update user profile');
-    }
-  }
-
-  async getUserByUsername(username: string): Promise<User> {
-    try {
-      const users = await clerkClient.users.getUserList({
-        username: [username],
-      });
-
-      if (users.data.length === 0) {
-        throw new NotFoundException(
-          `User with username '${username}' not found`,
-        );
-      }
-
-      return users.data[0];
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new InternalServerErrorException(
-        'Failed to fetch user by username',
-      );
-    }
-  }
-
-  async addToChatListByUsername(
-    userId: string,
-    targetUsername: string,
-  ): Promise<{ success: boolean; message: string }> {
-    try {
-      const targetUser = await this.getUserByUsername(targetUsername);
-      return await this.addToChatList(userId, targetUser.id);
-    } catch (error) {
-      if (
-        error instanceof NotFoundException ||
-        error instanceof BadRequestException
-      ) {
-        throw error;
-      }
-      throw new InternalServerErrorException('Failed to add user to chat list');
-    }
-  }
-
-  async removeFromChatListByUsername(
-    userId: string,
-    targetUsername: string,
-  ): Promise<{ success: boolean; message: string }> {
-    try {
-      const targetUser = await this.getUserByUsername(targetUsername);
-      return await this.removeFromChatList(userId, targetUser.id);
-    } catch (error) {
-      if (
-        error instanceof NotFoundException ||
-        error instanceof BadRequestException
-      ) {
-        throw error;
-      }
-      throw new InternalServerErrorException(
-        'Failed to remove user from chat list',
-      );
-    }
-  }
-
-
-  async isInChatListByUsername(
-    userId: string,
-    targetUsername: string,
-  ): Promise<boolean> {
-    try {
-      const targetUser = await this.getUserByUsername(targetUsername);
-      return await this.isInChatList(userId, targetUser.id);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        return false;
-      }
-      return false;
-    }
+    await clerkClient.users.updateUserMetadata(userId, {
+      publicMetadata: {
+        ...existingMetadata,
+        chatList: chatListData.chatList,
+      },
+    });
   }
 }
