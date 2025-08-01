@@ -1,4 +1,16 @@
-import { IsString, IsNotEmpty, MinLength, MaxLength, IsOptional, IsNumber, Min, Max } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  MinLength,
+  MaxLength,
+  IsOptional,
+  IsNumber,
+  Min,
+  Max,
+  IsArray,
+  ArrayNotEmpty,
+  ArrayMaxSize,
+} from 'class-validator';
 import { Transform } from 'class-transformer';
 
 export class UpdateUsernameDto {
@@ -78,4 +90,20 @@ export class GetChatListDto {
   @Min(1)
   @Max(50)
   limit?: number = 10;
+}
+
+export class BulkAddToChatListDto {
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsString({ each: true })
+  @ArrayMaxSize(10)
+  targetUserIds: string[];
+}
+
+export class BulkRemoveFromChatListDto {
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsString({ each: true })
+  @ArrayMaxSize(10)
+  targetUserIds: string[];
 }

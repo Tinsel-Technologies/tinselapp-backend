@@ -25,6 +25,8 @@ import {
   AddToChatListDto,
   SuggestUsersDto,
   GetChatListDto,
+  BulkAddToChatListDto,
+  BulkRemoveFromChatListDto,
 } from './dto/user.dto';
 
 @Controller('/api/v1/user')
@@ -260,6 +262,45 @@ export class UserController {
       userId,
       getChatListDto.page,
       getChatListDto.limit,
+    );
+  }
+
+  @Post('/:userId/chatlist/bulk-add')
+  @HttpCode(HttpStatus.OK)
+  addMultipleUsersToChatList(
+    @Param('userId') userId: string,
+    @Body() bulkAddDto: BulkAddToChatListDto,
+  ) {
+    if (!userId) {
+      throw new BadRequestException('User ID is required');
+    }
+    if (!bulkAddDto.targetUserIds || bulkAddDto.targetUserIds.length === 0) {
+      throw new BadRequestException('Target user IDs array is required');
+    }
+    return this.userService.addMultipleUsersToChatList(
+      userId,
+      bulkAddDto.targetUserIds,
+    );
+  }
+
+  @Delete('/:userId/chatlist/bulk-remove')
+  @HttpCode(HttpStatus.OK)
+  removeMultipleUsersFromChatList(
+    @Param('userId') userId: string,
+    @Body() bulkRemoveDto: BulkRemoveFromChatListDto,
+  ) {
+    if (!userId) {
+      throw new BadRequestException('User ID is required');
+    }
+    if (
+      !bulkRemoveDto.targetUserIds ||
+      bulkRemoveDto.targetUserIds.length === 0
+    ) {
+      throw new BadRequestException('Target user IDs array is required');
+    }
+    return this.userService.removeMultipleUsersFromChatList(
+      userId,
+      bulkRemoveDto.targetUserIds,
     );
   }
 }

@@ -532,113 +532,298 @@ export class UserService {
     return shuffled;
   }
 
+  async getAllChatListUsers(userId: string): Promise<{
+    chatList: User[];
+    count: number;
+    breakdown: { females: number; males: number; unknown: number };
+  }> {
+    try {
+      const user = await this.getUser(userId);
+      const currentMetadata = (user.publicMetadata as any) || {};
+      const chatListIds = currentMetadata.chatList || [];
 
-async getAllChatListUsers(userId: string): Promise<{
-  chatList: User[];
-  count: number;
-  breakdown: { females: number; males: number; unknown: number };
-}> {
-  try {
-    const user = await this.getUser(userId);
-    const currentMetadata = user.publicMetadata as any || {};
-    const chatListIds = currentMetadata.chatList || [];
+      if (chatListIds.length === 0) {
+        return {
+          chatList: [],
+          count: 0,
+          breakdown: { females: 0, males: 0, unknown: 0 },
+        };
+      }
 
-    if (chatListIds.length === 0) {
-      return {
-        chatList: [],
-        count: 0,
-        breakdown: { females: 0, males: 0, unknown: 0 },
-      };
-    }
+      const chatUsers = await Promise.all(
+        chatListIds.map(async (chatUserId: string) => {
+          try {
+            return await this.getUser(chatUserId);
+          } catch (error) {
+            return null;
+          }
+        }),
+      );
+      const validChatUsers = chatUsers.filter(
+        (user) => user !== null,
+      ) as User[];
 
-    const chatUsers = await Promise.all(
-      chatListIds.map(async (chatUserId: string) => {
-        try {
-          return await this.getUser(chatUserId);
-        } catch (error) {
-          return null;
-        }
-      })
-    );
-    const validChatUsers = chatUsers.filter(user => user !== null) as User[];
-    
-    if (validChatUsers.length !== chatListIds.length) {
-      const validUserIds = validChatUsers.map(user => user.id);
-      await clerkClient.users.updateUserMetadata(userId, {
-        publicMetadata: {
-          ...currentMetadata,
-          chatList: validUserIds,
+      if (validChatUsers.length !== chatListIds.length) {
+        const validUserIds = validChatUsers.map((user) => user.id);
+        await clerkClient.users.updateUserMetadata(userId, {
+          publicMetadata: {
+            ...currentMetadata,
+            chatList: validUserIds,
+          },
+        });
+      }
+
+      const breakdown = validChatUsers.reduce(
+        (acc, user) => {
+          const userMetadata = (user.publicMetadata as any) || {};
+          const gender = userMetadata.gender;
+
+          if (gender === 'female') {
+            acc.females++;
+          } else if (gender === 'male') {
+            acc.males++;
+          } else {
+            acc.unknown++;
+          }
+
+          return acc;
         },
-      });
+        { females: 0, males: 0, unknown: 0 },
+      );
+
+      return {
+        chatList: validChatUsers,
+        count: validChatUsers.length,
+        breakdown,
+      };
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to fetch chat list users');
     }
+  }
 
-    const breakdown = validChatUsers.reduce(
-      (acc, user) => {
-        const userMetadata = user.publicMetadata as any || {};
-        const gender = userMetadata.gender;
-        
-        if (gender === 'female') {
-          acc.females++;
-        } else if (gender === 'male') {
-          acc.males++;
-        } else {
-          acc.unknown++;
+  async getChatListUsersPaginated(
+    userId: string,
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<{
+    chatList: User[];
+    pagination: {
+      currentPage: number;
+      totalPages: number;
+      totalUsers: number;
+      hasNext: boolean;
+      hasPrev: boolean;
+    };
+    breakdown: { females: number; males: number; unknown: number };
+  }> {
+    try {
+      const allChatData = await this.getAllChatListUsers(userId);
+
+      const totalUsers = allChatData.count;
+      const totalPages = Math.ceil(totalUsers / limit);
+      const startIndex = (page - 1) * limit;
+      const endIndex = startIndex + limit;
+
+      const paginatedUsers = allChatData.chatList.slice(startIndex, endIndex);
+
+      return {
+        chatList: paginatedUsers,
+        pagination: {
+          currentPage: page,
+          totalPages,
+          totalUsers,
+          hasNext: page < totalPages,
+          hasPrev: page > 1,
+        },
+        breakdown: allChatData.breakdown,
+      };
+    } catch (error) {
+      throw new InternalServerErrorException(
+        'Failed to fetch paginated chat list',
+      );
+    }
+  }
+
+
+  async addMultipleUsersToChatList(
+    userId: string,
+    targetUserIds: string[],
+  ): Promise<{
+    success: boolean;
+    message: string;
+    results: {
+      added: string[];
+      alreadyInList: string[];
+      notFound: string[];
+      errors: string[];
+    };
+    summary: {
+      totalRequested: number;
+      successfullyAdded: number;
+      skipped: number;
+      failed: number;
+    };
+  }> {
+    try {
+      const user = await this.getUser(userId);
+      const currentMetadata = (user.publicMetadata as any) || {};
+      const currentChatList = currentMetadata.chatList || [];
+
+      const uniqueTargetIds = [...new Set(targetUserIds)].filter(
+        (id) => id !== userId,
+      );
+
+      if (uniqueTargetIds.length === 0) {
+        throw new BadRequestException('No valid user IDs provided');
+      }
+
+      const results = {
+        added: [] as string[],
+        alreadyInList: [] as string[],
+        notFound: [] as string[],
+        errors: [] as string[],
+      };
+
+      for (const targetUserId of uniqueTargetIds) {
+        try {
+          if (currentChatList.includes(targetUserId)) {
+            results.alreadyInList.push(targetUserId);
+            continue;
+          }
+
+          const targetUser = await this.getUser(targetUserId);
+          if (!targetUser) {
+            results.notFound.push(targetUserId);
+            continue;
+          }
+
+          results.added.push(targetUserId);
+        } catch (error) {
+          if (error.message?.includes('not found') || error.status === 404) {
+            results.notFound.push(targetUserId);
+          } else {
+            results.errors.push(targetUserId);
+          }
         }
-        
-        return acc;
-      },
-      { females: 0, males: 0, unknown: 0 }
-    );
+      }
 
-    return {
-      chatList: validChatUsers,
-      count: validChatUsers.length,
-      breakdown,
-    };
-  } catch (error) {
-    throw new InternalServerErrorException('Failed to fetch chat list users');
+      if (results.added.length > 0) {
+        const updatedChatList = [...currentChatList, ...results.added];
+
+        await clerkClient.users.updateUserMetadata(userId, {
+          publicMetadata: {
+            ...currentMetadata,
+            chatList: updatedChatList,
+          },
+        });
+      }
+
+      const summary = {
+        totalRequested: uniqueTargetIds.length,
+        successfullyAdded: results.added.length,
+        skipped: results.alreadyInList.length,
+        failed: results.notFound.length + results.errors.length,
+      };
+
+      const success = results.added.length > 0;
+      const message = success
+        ? `Successfully added ${results.added.length} user(s) to chat list`
+        : 'No users were added to chat list';
+
+      return {
+        success,
+        message,
+        results,
+        summary,
+      };
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        'Failed to add multiple users to chat list',
+      );
+    }
   }
-}
 
 
-async getChatListUsersPaginated(
-  userId: string,
-  page: number = 1,
-  limit: number = 10,
-): Promise<{
-  chatList: User[];
-  pagination: {
-    currentPage: number;
-    totalPages: number;
-    totalUsers: number;
-    hasNext: boolean;
-    hasPrev: boolean;
-  };
-  breakdown: { females: number; males: number; unknown: number };
-}> {
-  try {
-    const allChatData = await this.getAllChatListUsers(userId);
-    
-    const totalUsers = allChatData.count;
-    const totalPages = Math.ceil(totalUsers / limit);
-    const startIndex = (page - 1) * limit;
-    const endIndex = startIndex + limit;
-    
-    const paginatedUsers = allChatData.chatList.slice(startIndex, endIndex);
-    
-    return {
-      chatList: paginatedUsers,
-      pagination: {
-        currentPage: page,
-        totalPages,
-        totalUsers,
-        hasNext: page < totalPages,
-        hasPrev: page > 1,
-      },
-      breakdown: allChatData.breakdown,
+  async removeMultipleUsersFromChatList(
+    userId: string,
+    targetUserIds: string[],
+  ): Promise<{
+    success: boolean;
+    message: string;
+    results: {
+      removed: string[];
+      notInList: string[];
     };
-  } catch (error) {
-    throw new InternalServerErrorException('Failed to fetch paginated chat list');
+    summary: {
+      totalRequested: number;
+      successfullyRemoved: number;
+      notFound: number;
+    };
+  }> {
+    try {
+      const user = await this.getUser(userId);
+      const currentMetadata = (user.publicMetadata as any) || {};
+      const currentChatList = currentMetadata.chatList || [];
+
+      const uniqueTargetIds = [...new Set(targetUserIds)];
+
+      if (uniqueTargetIds.length === 0) {
+        throw new BadRequestException('No valid user IDs provided');
+      }
+
+      const results = {
+        removed: [] as string[],
+        notInList: [] as string[],
+      };
+
+      uniqueTargetIds.forEach((targetUserId) => {
+        if (currentChatList.includes(targetUserId)) {
+          results.removed.push(targetUserId);
+        } else {
+          results.notInList.push(targetUserId);
+        }
+      });
+
+      if (results.removed.length > 0) {
+        const updatedChatList = currentChatList.filter(
+          (id: string) => !results.removed.includes(id),
+        );
+
+        await clerkClient.users.updateUserMetadata(userId, {
+          publicMetadata: {
+            ...currentMetadata,
+            chatList: updatedChatList,
+          },
+        });
+      }
+
+      const summary = {
+        totalRequested: uniqueTargetIds.length,
+        successfullyRemoved: results.removed.length,
+        notFound: results.notInList.length,
+      };
+
+      const success = results.removed.length > 0;
+      const message = success
+        ? `Successfully removed ${results.removed.length} user(s) from chat list`
+        : 'No users were removed from chat list';
+
+      return {
+        success,
+        message,
+        results,
+        summary,
+      };
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        'Failed to remove multiple users from chat list',
+      );
+    }
   }
-}
 }
