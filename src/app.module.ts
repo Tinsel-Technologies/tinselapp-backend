@@ -12,6 +12,7 @@ import { PrismaService } from './prisma/prisma.service';
 import { PrismaModule } from './prisma/prisma.module';
 import { ChatModule } from './chat/chat.module';
 import { ClerkModule } from './clerk/clerk.module';
+import { PaymentModule } from './payment/payment.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { ClerkModule } from './clerk/clerk.module';
     PrismaModule,
     ChatModule,
     PrismaModule,
+    PaymentModule,
     ChatModule,
     ClerkModule,
   ],
