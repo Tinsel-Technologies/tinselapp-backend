@@ -1,0 +1,72 @@
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsBoolean,
+  IsEnum,
+} from 'class-validator';
+import { MessageType } from '@prisma/client';
+
+export class CreateChatRoomDto {
+  @IsString()
+  @IsNotEmpty()
+  recipientId: string;
+}
+
+export class SendMessageDto {
+  @IsString()
+  @IsNotEmpty()
+  roomId: string;
+
+  @IsString()
+  @IsNotEmpty()
+  message: string;
+
+  @IsEnum(MessageType)
+  @IsOptional()
+  messageType?: MessageType = MessageType.TEXT;
+}
+
+export class EditMessageDto {
+  @IsString()
+  @IsNotEmpty()
+  messageId: string;
+
+  @IsString()
+  @IsNotEmpty()
+  newMessage: string;
+}
+
+export class DeleteMessageDto {
+  @IsString()
+  @IsNotEmpty()
+  messageId: string;
+}
+
+export class CloseChatRoomDto {
+  @IsString()
+  @IsNotEmpty()
+  roomId: string;
+}
+
+export class TypingDto {
+  @IsString()
+  @IsNotEmpty()
+  roomId: string;
+
+  @IsBoolean()
+  @IsNotEmpty()
+  isTyping: boolean;
+}
+
+export class GetChatHistoryDto {
+  @IsString()
+  @IsNotEmpty()
+  roomId: string;
+
+  @IsOptional()
+  limit?: number = 50;
+
+  @IsOptional()
+  offset?: number = 0;
+}

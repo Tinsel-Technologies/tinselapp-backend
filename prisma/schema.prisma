@@ -1,0 +1,46 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model ChatRoom {
+  id           String   @id @default(cuid())
+  participant1 String
+  participant2 String
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  lastActivity DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  messages Message[]
+
+  @@unique([participant1, participant2])
+  @@map("chat_rooms")
+}
+
+model Message {
+  id          String      @id @default(cuid())
+  chatRoomId  String
+  senderId    String
+  message     String
+  messageType MessageType @default(TEXT)
+  isEdited    Boolean     @default(false)
+  isDeleted   Boolean     @default(false)
+  createdAt   DateTime    @default(now())
+  editedAt    DateTime?
+  updatedAt   DateTime    @updatedAt
+
+  chatRoom ChatRoom @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  FILE
+}
