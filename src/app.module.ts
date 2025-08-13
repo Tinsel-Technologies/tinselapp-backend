@@ -8,9 +8,10 @@ import { UserController } from './user/user.controller';
 import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { PaymentModule } from './payment/payment.module';
 
 @Module({
-  imports: [ConfigModule.forRoot(), AuthGuardModule],
+  imports: [ConfigModule.forRoot(), AuthGuardModule, PaymentModule],
   controllers: [UserController, AppController],
   providers: [AuthGuardService, UserService, ClerkClientProvider,AppService],
 })
