@@ -8,11 +8,28 @@ import { UserController } from './user/user.controller';
 import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { PaymentModule } from './payment/payment.module';
+import { PrismaService } from './prisma/prisma.service';
+import { PrismaModule } from './prisma/prisma.module';
+import { ChatModule } from './chat/chat.module';
+import { ClerkModule } from './clerk/clerk.module';
 
 @Module({
-  imports: [ConfigModule.forRoot(), AuthGuardModule, PaymentModule],
+  imports: [
+    ConfigModule.forRoot(),
+    AuthGuardModule,
+    PrismaModule,
+    ChatModule,
+    PrismaModule,
+    ChatModule,
+    ClerkModule,
+  ],
   controllers: [UserController, AppController],
-  providers: [AuthGuardService, UserService, ClerkClientProvider,AppService],
+  providers: [
+    AuthGuardService,
+    UserService,
+    ClerkClientProvider,
+    AppService,
+    PrismaService,
+  ],
 })
 export class AppModule {}
