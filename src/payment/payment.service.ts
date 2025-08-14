@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { MpesaCallbackDto, ProcessedCallback } from './dto/callback.dto';
+import { PrismaService } from 'src/prisma/prisma.service';
+import { PaymentStatus } from '@prisma/client';
 
 interface AuthResponse {
   access_token: string;
@@ -49,8 +51,7 @@ export class PaymentService {
   private readonly passkey =
     'bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919';
 
-  // Store for tracking payments (in production, use a database)
-  private paymentStore = new Map<string, any>();
+  constructor(private prisma: PrismaService) {}
 
   async getAccessToken(): Promise<string | null> {
     const buffer = Buffer.from(`${this.consumerKey}:${this.consumerSecret}`);
@@ -100,6 +101,7 @@ export class PaymentService {
 
     const formattedPhone = this.formatPhoneNumber(phoneNumber);
     const timestamp = this.generateTimestamp();
+    const accountReference = `Payment-${Date.now()}`;
 
     const password = Buffer.from(
       `${this.businessShortCode}${this.passkey}${timestamp}`,
@@ -116,7 +118,7 @@ export class PaymentService {
       PhoneNumber: formattedPhone,
       CallBackURL:
         'https://tinselapp-backend-production.up.railway.app/api/v1/payment/callback',
-      AccountReference: `Payment-${Date.now()}`,
+      AccountReference: accountReference,
       TransactionDesc: `Payment of KES ${amount}`,
     };
 
@@ -172,11 +174,22 @@ export class PaymentService {
       }
 
       console.log('Parsed payment response:', result);
+
+      // Storing the payment in the database
       if (result.CheckoutRequestID) {
-        this.paymentStore.set(result.CheckoutRequestID, {
-          ...paymentData,
-          timestamp: new Date(),
-          status: 'pending',
+        await this.prisma.payment.create({
+          data: {
+            merchantRequestId: result.MerchantRequestID,
+            checkoutRequestId: result.CheckoutRequestID,
+            amount,
+            phoneNumber: formattedPhone,
+            accountReference,
+            transactionDesc: paymentRequest.TransactionDesc,
+            responseCode: result.ResponseCode,
+            responseDescription: result.ResponseDescription,
+            customerMessage: result.CustomerMessage,
+            status: PaymentStatus.PENDING,
+          },
         });
       }
 
@@ -227,26 +240,83 @@ export class PaymentService {
       });
     }
 
-    const storedPayment = this.paymentStore.get(stkCallback.CheckoutRequestID);
-    if (storedPayment) {
-      storedPayment.status =
-        stkCallback.ResultCode === 0 ? 'completed' : 'failed';
-      storedPayment.callback = processedCallback;
-      storedPayment.updatedAt = new Date();
+    try {
+      const payment = await this.prisma.payment.findUnique({
+        where: { checkoutRequestId: stkCallback.CheckoutRequestID },
+      });
 
-      console.log('Updated payment record:', storedPayment);
+      if (payment) {
+        const newStatus =
+          stkCallback.ResultCode === 0
+            ? PaymentStatus.COMPLETED
+            : PaymentStatus.FAILED;
+
+        await this.prisma.payment.update({
+          where: { id: payment.id },
+          data: { status: newStatus },
+        });
+
+        await this.prisma.paymentCallback.create({
+          data: {
+            paymentId: payment.id,
+            merchantRequestId: stkCallback.MerchantRequestID,
+            checkoutRequestId: stkCallback.CheckoutRequestID,
+            resultCode: stkCallback.ResultCode,
+            resultDesc: stkCallback.ResultDesc,
+            amount: processedCallback.amount,
+            mpesaReceiptNumber: processedCallback.mpesaReceiptNumber,
+            transactionDate: processedCallback.transactionDate,
+            phoneNumber: processedCallback.phoneNumber,
+          },
+        });
+
+        console.log(`Payment ${payment.id} updated to status: ${newStatus}`);
+
+        // Here you can add additional business logic:
+        // - Send notifications to users
+        // - Trigger webhooks
+        // - Update related records
+      } else {
+        console.warn(
+          `Payment not found for CheckoutRequestID: ${stkCallback.CheckoutRequestID}`,
+        );
+      }
+    } catch (error) {
+      console.error('Error updating payment in database:', error);
     }
-
-    // Here you would typically:
-    // 1. Update your database with the payment status
-    // 2. Send notifications to the user
-    // 3. Trigger any business logic based on payment success/failure
 
     return processedCallback;
   }
 
   async getPaymentStatus(checkoutRequestId: string): Promise<any> {
-    return this.paymentStore.get(checkoutRequestId) || null;
+    try {
+      const payment = await this.prisma.payment.findUnique({
+        where: { checkoutRequestId },
+        include: { callback: true },
+      });
+
+      return payment;
+    } catch (error) {
+      console.error('Error fetching payment status:', error);
+      return null;
+    }
+  }
+
+  async getPaymentHistory(phoneNumber?: string): Promise<any[]> {
+    try {
+      const payments = await this.prisma.payment.findMany({
+        where: phoneNumber
+          ? { phoneNumber: this.formatPhoneNumber(phoneNumber) }
+          : {},
+        include: { callback: true },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      return payments;
+    } catch (error) {
+      console.error('Error fetching payment history:', error);
+      return [];
+    }
   }
 
   private formatPhoneNumber(phoneNumber: string): string {

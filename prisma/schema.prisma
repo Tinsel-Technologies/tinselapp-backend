@@ -39,8 +39,53 @@ model Message {
   @@map("messages")
 }
 
+model Payment {
+  id                  String        @id @default(cuid())
+  merchantRequestId   String?       @unique
+  checkoutRequestId   String?       @unique
+  amount              Float
+  phoneNumber         String
+  accountReference    String
+  transactionDesc     String
+  status              PaymentStatus @default(PENDING)
+  responseCode        String?
+  responseDescription String?
+  customerMessage     String?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  callback PaymentCallback?
+
+  @@map("payments")
+}
+
+model PaymentCallback {
+  id                 String   @id @default(cuid())
+  paymentId          String   @unique
+  merchantRequestId  String
+  checkoutRequestId  String
+  resultCode         Int
+  resultDesc         String
+  amount             Float?
+  mpesaReceiptNumber String?
+  transactionDate    String?
+  phoneNumber        String?
+  createdAt          DateTime @default(now())
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@map("payment_callbacks")
+}
+
 enum MessageType {
   TEXT
   IMAGE
   FILE
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
 }
