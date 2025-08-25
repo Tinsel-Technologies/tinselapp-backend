@@ -35,6 +35,7 @@ import { AuthGuardService } from '../auth-guard/auth-guard.service';
     methods: ['GET', 'POST'],
   },
   namespace: '/chat',
+  transports: ['websocket', 'polling'],
 })
 // @UseGuards(AuthGuardService)
 @UsePipes(new ValidationPipe())
