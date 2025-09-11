@@ -8,6 +8,6 @@ import { PrismaModule } from 'src/prisma/prisma.module';
 @Module({
   imports: [UserModule, AuthGuardModule, PrismaModule],
   providers: [ChatGateway, ChatService],
-  exports: [ChatService],
+  exports: [ChatService, ChatGateway],
 })
 export class ChatModule {}

@@ -32,12 +32,12 @@ import { AuthGuardService } from '../auth-guard/auth-guard.service';
 @WebSocketGateway({
   cors: {
     origin: '*',
-    methods: ['GET', 'POST'],
   },
-  namespace: '/chat',
-  transports: ['websocket', 'polling'],
+  namespace: 'chat',
+  // transports: ['websocket'],
+  // allowEIO3: true,
 })
-// @UseGuards(AuthGuardService)
+@UseGuards(AuthGuardService)
 @UsePipes(new ValidationPipe())
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
