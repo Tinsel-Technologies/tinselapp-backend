@@ -34,8 +34,8 @@ import { AuthGuardService } from '../auth-guard/auth-guard.service';
     origin: '*',
   },
   namespace: 'chat',
-  // transports: ['websocket'],
-  // allowEIO3: true,
+  transports: ['websocket'],
+  allowEIO3: true,
 })
 @UseGuards(AuthGuardService)
 @UsePipes(new ValidationPipe())

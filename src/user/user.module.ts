@@ -4,9 +4,9 @@ import { UserController } from './user.controller';
 import { ClerkModule } from 'src/clerk/clerk.module';
 
 @Module({
-   imports: [ClerkModule],
+  imports: [ClerkModule],
   controllers: [UserController],
   providers: [UserService],
-  exports:[UserService]
+  exports: [UserService],
 })
 export class UserModule {}
