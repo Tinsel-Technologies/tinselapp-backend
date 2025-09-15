@@ -29,6 +29,7 @@ export class AuthGuardService implements CanActivate {
       const tokenToVerify = bearerToken || sessionToken;
       const tokenPayload = await verifyToken(tokenToVerify, {
         secretKey: process.env.CLERK_SECRET_KEY,
+        clockSkewInMs: 60000,
       });
 
       if (!tokenPayload) {

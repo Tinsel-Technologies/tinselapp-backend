@@ -13,9 +13,6 @@ import {
   UsePipes,
   ValidationPipe,
   Logger,
-  ForbiddenException,
-  NotFoundException,
-  BadRequestException,
   Inject,
 } from '@nestjs/common';
 import { ChatService } from './chat.service';
@@ -31,7 +28,6 @@ import {
 import { SocketAuthGuardService } from 'src/socket-auth-guard/socket-auth-guard.service';
 import { ClerkClient, User , verifyToken} from '@clerk/backend'; // Use the correct type from Clerk
 
-// This is a custom type to make the 'user' property on the socket type-safe
 interface AuthenticatedSocket extends Socket {
   data: {
     user: User;
@@ -42,8 +38,7 @@ interface AuthenticatedSocket extends Socket {
   cors: { origin: '*' },
   namespace: 'chat',
 })
-// You can keep this guard for all @SubscribeMessage handlers
-@UseGuards(SocketAuthGuardService)
+// @UseGuards(SocketAuthGuardService)
 @UsePipes(new ValidationPipe())
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
@@ -51,33 +46,28 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   private readonly logger = new Logger(ChatGateway.name);
 
-  // Inject ClerkClient directly to handle connection auth
   constructor(
     private readonly chatService: ChatService,
     @Inject('ClerkClient')
     private readonly clerkClient: ClerkClient,
   ) {}
 
-  // THIS IS THE MAIN FIX
   async handleConnection(client: AuthenticatedSocket) {
     try {
-      // Step 1: Extract the token from the handshake
       const token = this.extractTokenFromClient(client);
       if (!token) {
         throw new Error('No authentication token provided');
       }
 
-      // Step 2: Verify the token
       const tokenPayload = await verifyToken(token, {
         secretKey: process.env.CLERK_SECRET_KEY,
+       clockSkewInMs: 60000,
       });
 
- 
       const user = await this.clerkClient.users.getUser(tokenPayload.sub);
       client.data.user = user;
       const userId = user.id;
 
-      // Step 4: Proceed with your original connection logic
       this.chatService.registerUserSocket(userId, client.id);
       await client.join(`user_${userId}`);
 
