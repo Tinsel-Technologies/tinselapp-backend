@@ -16,6 +16,7 @@ import {
   ForbiddenException,
   NotFoundException,
   BadRequestException,
+  Inject,
 } from '@nestjs/common';
 import { ChatService } from './chat.service';
 import {
@@ -28,7 +29,7 @@ import {
   GetChatHistoryDto,
 } from './dto/chat.dto';
 import { SocketAuthGuardService } from 'src/socket-auth-guard/socket-auth-guard.service';
-import { User } from '@clerk/express'; // Use the correct type from Clerk
+import { ClerkClient, User , verifyToken} from '@clerk/backend'; // Use the correct type from Clerk
 
 // This is a custom type to make the 'user' property on the socket type-safe
 interface AuthenticatedSocket extends Socket {
@@ -38,12 +39,11 @@ interface AuthenticatedSocket extends Socket {
 }
 
 @WebSocketGateway({
-  cors: {
-    origin: '*',
-  },
+  cors: { origin: '*' },
   namespace: 'chat',
 })
-@UseGuards(SocketAuthGuardService) // Guard applies to all handlers, including connection
+// You can keep this guard for all @SubscribeMessage handlers
+@UseGuards(SocketAuthGuardService)
 @UsePipes(new ValidationPipe())
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
@@ -51,24 +51,33 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   private readonly logger = new Logger(ChatGateway.name);
 
-  constructor(private readonly chatService: ChatService) {}
+  // Inject ClerkClient directly to handle connection auth
+  constructor(
+    private readonly chatService: ChatService,
+    @Inject('ClerkClient')
+    private readonly clerkClient: ClerkClient,
+  ) {}
 
+  // THIS IS THE MAIN FIX
   async handleConnection(client: AuthenticatedSocket) {
     try {
-      // CORRECTED: Get user directly from the socket data, populated by the guard.
-      // This is secure and reliable.
-      const user = client.data.user;
-
-      if (!user) {
-        this.logger.warn(
-          `Disconnecting client ${client.id}: No authenticated user found.`,
-        );
-        client.disconnect();
-        return;
+      // Step 1: Extract the token from the handshake
+      const token = this.extractTokenFromClient(client);
+      if (!token) {
+        throw new Error('No authentication token provided');
       }
+
+      // Step 2: Verify the token
+      const tokenPayload = await verifyToken(token, {
+        secretKey: process.env.CLERK_SECRET_KEY,
+      });
+
+ 
+      const user = await this.clerkClient.users.getUser(tokenPayload.sub);
+      client.data.user = user;
       const userId = user.id;
 
-      // The rest of your logic is now safe to use
+      // Step 4: Proceed with your original connection logic
       this.chatService.registerUserSocket(userId, client.id);
       await client.join(`user_${userId}`);
 
@@ -76,16 +85,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         await this.chatService.getUserActiveChatRooms(userId);
       for (const room of activeChatRooms) {
         await client.join(room.id);
-      }
-
-      for (const room of activeChatRooms) {
         const otherParticipant =
           room.participant1 === userId ? room.participant2 : room.participant1;
         if (this.chatService.isUserOnline(otherParticipant)) {
-          this.server.to(`user_${otherParticipant}`).emit('userOnline', {
-            userId,
-            roomId: room.id,
-          });
+          this.server
+            .to(`user_${otherParticipant}`)
+            .emit('userOnline', { userId, roomId: room.id });
         }
       }
 
@@ -103,17 +108,16 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         }),
       });
 
-      this.logger.log(
-        `User ${userId} (${user.firstName}) connected with socket ${client.id}`,
-      );
+      this.logger.log(`User ${userId} (${user.firstName}) connected with socket ${client.id}`);
     } catch (error) {
-      this.logger.error(`Connection error for client ${client.id}:`, error);
+      this.logger.error(`Authentication failed for client ${client.id}: ${error.message}`);
+      client.emit('auth_error', { message: 'Authentication failed' });
       client.disconnect();
     }
   }
 
   async handleDisconnect(client: AuthenticatedSocket) {
-    // This part was mostly correct, but now it's more robust
+    // This logic remains the same
     const userId = this.chatService.unregisterUserSocket(client.id);
     if (userId) {
       this.logger.log(`User ${userId} disconnected`);
@@ -122,14 +126,22 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       for (const room of activeChatRooms) {
         const otherParticipant =
           room.participant1 === userId ? room.participant2 : room.participant1;
-        this.server.to(`user_${otherParticipant}`).emit('userOffline', {
-          userId,
-          roomId: room.id,
-        });
+        this.server
+          .to(`user_${otherParticipant}`)
+          .emit('userOffline', { userId, roomId: room.id });
       }
-    } else {
-      this.logger.log(`Unauthenticated client ${client.id} disconnected`);
     }
+  }
+
+  // Helper method to keep code DRY (copy from your guard)
+  private extractTokenFromClient(client: Socket): string | null {
+    const authHeader =
+      client.handshake.auth?.token ||
+      client.handshake.headers?.authorization;
+    if (authHeader?.startsWith('Bearer ')) {
+      return authHeader.substring(7);
+    }
+    return authHeader; // Also handle case where it's just the token
   }
 
   @SubscribeMessage('createChatRoom')
