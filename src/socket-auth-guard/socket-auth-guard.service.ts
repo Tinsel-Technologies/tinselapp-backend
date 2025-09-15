@@ -18,7 +18,10 @@ export class SocketAuthGuardService implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const client: Socket = context.switchToWs().getClient();
     
-    // Get token from different possible sources
+    if (client.data.user && client.data.tokenExpiry && client.data.tokenExpiry > Date.now()) {
+      return true;
+    }
+    
     const token = this.extractTokenFromClient(client);
 
     if (!token) {
@@ -35,34 +38,38 @@ export class SocketAuthGuardService implements CanActivate {
       }
 
       const user = await this.clerkClient.users.getUser(tokenPayload.sub);
-      client.data.user = user; // Store user in Socket.IO's data object
+      client.data.user = user;
+      client.data.tokenExpiry = (tokenPayload.exp * 1000) - 30000;
+      
       return true;
     } catch (err) {
       console.error('Token verification error:', err);
+      
+      if (err.message?.includes('expired')) {
+        client.emit('token_expired', 'Please refresh your authentication');
+        return false; 
+      }
+      
       throw new WsException('Invalid or expired token');
     }
   }
 
   private extractTokenFromClient(client: Socket): string | null {
-    // Method 1: From auth object
     if (client.handshake.auth?.token) {
       return client.handshake.auth.token;
     }
 
-    // Method 2: From Authorization header
     const authHeader = client.handshake.headers?.authorization;
     if (authHeader?.startsWith('Bearer ')) {
       return authHeader.substring(7);
     }
 
-    // Method 3: From query parameters
     if (client.handshake.query?.token) {
       return Array.isArray(client.handshake.query.token) 
         ? client.handshake.query.token[0] 
         : client.handshake.query.token;
     }
 
-    // Method 4: From cookies (if available)
     if (client.handshake.headers?.cookie) {
       const cookies = this.parseCookies(client.handshake.headers.cookie);
       return cookies.__session || null;

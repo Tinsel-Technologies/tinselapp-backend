@@ -9,13 +9,13 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import {
-  UseGuards,
   UsePipes,
   ValidationPipe,
   Logger,
   ForbiddenException,
   NotFoundException,
   BadRequestException,
+  Inject,
 } from '@nestjs/common';
 import { ChatService } from './chat.service';
 import {
@@ -23,11 +23,9 @@ import {
   SendMessageDto,
   EditMessageDto,
   DeleteMessageDto,
-  CloseChatRoomDto,
-  TypingDto,
   GetChatHistoryDto,
 } from './dto/chat.dto';
-import { SocketAuthGuardService } from 'src/socket-auth-guard/socket-auth-guard.service';
+import { ClerkClient, verifyToken } from '@clerk/backend';
 
 @WebSocketGateway({
   cors: {
@@ -37,7 +35,6 @@ import { SocketAuthGuardService } from 'src/socket-auth-guard/socket-auth-guard.
   transports: ['websocket'],
   allowEIO3: true,
 })
-@UseGuards(SocketAuthGuardService)
 @UsePipes(new ValidationPipe())
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
@@ -45,16 +42,36 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   private readonly logger = new Logger(ChatGateway.name);
 
-  constructor(private readonly chatService: ChatService) {}
+  constructor(
+    private readonly chatService: ChatService,
+    @Inject('ClerkClient')
+    private readonly clerkClient: ClerkClient,
+  ) {}
 
   async handleConnection(client: Socket) {
     try {
-      const userId = client.handshake.query.userId as string;
+      const token = this.extractToken(client);
 
-      if (!userId) {
+      if (!token) {
+        this.logger.warn('No token provided during connection');
+        client.emit('error', { message: 'No authentication token provided' });
         client.disconnect();
         return;
       }
+
+      const tokenPayload = await verifyToken(token, {
+        secretKey: process.env.CLERK_SECRET_KEY,
+      });
+
+      if (!tokenPayload) {
+        client.emit('error', { message: 'Invalid token' });
+        client.disconnect();
+        return;
+      }
+
+      const user = await this.clerkClient.users.getUser(tokenPayload.sub);
+      client.data.user = user;
+      const userId = user.id;
 
       this.chatService.registerUserSocket(userId, client.id);
       await client.join(`user_${userId}`);
@@ -97,6 +114,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.logger.log(`User ${userId} connected with socket ${client.id}`);
     } catch (error) {
       this.logger.error('Connection error:', error);
+      client.emit('error', { message: 'Authentication failed' });
       client.disconnect();
     }
   }
@@ -134,20 +152,30 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
   ) {
     try {
-      const userId = this.chatService.getUserIdFromSocket(client.id);
-      if (!userId) {
+      const user = client.data.user;
+      if (!user) {
         client.emit('error', { message: 'User not authenticated' });
         return;
       }
 
+      const userId = user.id;
       const { recipientId } = createChatRoomDto;
+
+      this.logger.log(
+        `Creating chat room between ${userId} and ${recipientId}`,
+      );
+
       const room = await this.chatService.createChatRoom(userId, recipientId);
 
       await client.join(room.id);
       const recipientSocketId =
         this.chatService.getSocketIdFromUser(recipientId);
       if (recipientSocketId) {
-        this.server.sockets.sockets.get(recipientSocketId)?.join(room.id);
+        const recipientSocket =
+          this.server.sockets.sockets.get(recipientSocketId);
+        if (recipientSocket) {
+          await recipientSocket.join(room.id);
+        }
       }
 
       const otherParticipantId =
@@ -182,19 +210,27 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
   ) {
     try {
-      const senderId = this.chatService.getUserIdFromSocket(client.id);
-      if (!senderId) {
+      const user = client.data.user;
+      if (!user) {
         client.emit('error', { message: 'User not authenticated' });
         return;
       }
 
+      const senderId = user.id;
       const { roomId, message, messageType } = sendMessageDto;
+
+      this.logger.log(
+        `User ${senderId} sending message to room ${roomId}: ${message}`,
+      );
+
       const chatMessage = await this.chatService.sendMessage(
         senderId,
         roomId,
         message,
         messageType,
       );
+
+      this.logger.log(`Message created with ID: ${chatMessage.id}`);
 
       // Emit to all users in the room
       this.server.to(roomId).emit('newMessage', {
@@ -223,13 +259,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
   ) {
     try {
-      const userId = this.chatService.getUserIdFromSocket(client.id);
-      if (!userId) {
+      const user = client.data.user;
+      if (!user) {
         client.emit('error', { message: 'User not authenticated' });
         return;
       }
 
+      const userId = user.id;
       const { roomId, messageId, newMessage } = editMessageDto;
+
       const editedMessage = await this.chatService.editMessage(
         userId,
         messageId,
@@ -265,13 +303,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
   ) {
     try {
-      const userId = this.chatService.getUserIdFromSocket(client.id);
-      if (!userId) {
+      const user = client.data.user;
+      if (!user) {
         client.emit('error', { message: 'User not authenticated' });
         return;
       }
 
+      const userId = user.id;
       const { roomId, messageId } = deleteMessageDto;
+
       const deletedMessage = await this.chatService.deleteMessage(
         userId,
         messageId,
@@ -299,92 +339,22 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  @SubscribeMessage('closeChatRoom')
-  async handleCloseChatRoom(
-    @MessageBody() closeChatRoomDto: CloseChatRoomDto,
-    @ConnectedSocket() client: Socket,
-  ) {
-    try {
-      const userId = this.chatService.getUserIdFromSocket(client.id);
-      if (!userId) {
-        client.emit('error', { message: 'User not authenticated' });
-        return;
-      }
-
-      const { roomId } = closeChatRoomDto;
-      await this.chatService.closeChatRoom(userId, roomId);
-
-      // Emit to all users in the room
-      this.server.to(roomId).emit('chatRoomClosed', {
-        roomId,
-        closedBy: userId,
-        timestamp: new Date(),
-      });
-
-      // Remove all users from the room
-      this.server.in(roomId).socketsLeave(roomId);
-
-      this.logger.log(`Chat room ${roomId} closed by user ${userId}`);
-    } catch (error) {
-      this.logger.error('Close chat room error:', error);
-      if (
-        error instanceof NotFoundException ||
-        error instanceof ForbiddenException
-      ) {
-        client.emit('error', { message: error.message });
-      } else {
-        client.emit('error', { message: 'Failed to close chat room' });
-      }
-    }
-  }
-
-  @SubscribeMessage('typing')
-  async handleTyping(
-    @MessageBody() typingDto: TypingDto,
-    @ConnectedSocket() client: Socket,
-  ) {
-    try {
-      const userId = this.chatService.getUserIdFromSocket(client.id);
-      if (!userId) return;
-
-      const { roomId, isTyping } = typingDto;
-      const room = await this.chatService.getChatRoom(roomId);
-
-      if (
-        !room ||
-        (room.participant1 !== userId && room.participant2 !== userId)
-      ) {
-        return;
-      }
-
-      // Emit typing status to the room (excluding sender)
-      client.to(roomId).emit('userTyping', {
-        userId,
-        senderInfo: room.participantsInfo?.[userId],
-        isTyping,
-        roomId,
-        timestamp: new Date(),
-      });
-    } catch (error) {
-      this.logger.error('Typing error:', error);
-    }
-  }
-
   @SubscribeMessage('getChatHistory')
   async handleGetChatHistory(
     @MessageBody() getChatHistoryDto: GetChatHistoryDto,
     @ConnectedSocket() client: Socket,
   ) {
     try {
-      const userId = this.chatService.getUserIdFromSocket(client.id);
-      if (!userId) {
+      const user = client.data.user;
+      if (!user) {
         client.emit('error', { message: 'User not authenticated' });
         return;
       }
 
+      const userId = user.id;
       const { roomId, limit = 50, offset = 0 } = getChatHistoryDto;
-      const room = await this.chatService.getChatRoom(roomId);
 
+      const room = await this.chatService.getChatRoom(roomId);
       if (
         !room ||
         (room.participant1 !== userId && room.participant2 !== userId)
@@ -411,5 +381,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.logger.error('Get chat history error:', error);
       client.emit('error', { message: 'Failed to get chat history' });
     }
+  }
+
+  private extractToken(client: Socket): string | null {
+    return (
+      client.handshake.auth?.token ||
+      client.handshake.headers?.authorization?.replace('Bearer ', '') ||
+      (client.handshake.query?.token as string) ||
+      null
+    );
   }
 }
