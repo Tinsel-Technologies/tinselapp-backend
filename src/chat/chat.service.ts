@@ -548,4 +548,15 @@ export class ChatService {
       },
     });
   }
+
+  async isUserInRoom(userId: string, roomId: string): Promise<boolean> {
+    const room = await this.prisma.chatRoom.findFirst({
+      where: {
+        id: roomId,
+        OR: [{ participant1: userId }, { participant2: userId }],
+      },
+      select: { id: true },
+    });
+    return !!room;
+  }
 }
