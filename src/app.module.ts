@@ -12,6 +12,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { ChatModule } from './chat/chat.module';
 import { ClerkModule } from './clerk/clerk.module';
 import { PaymentModule } from './payment/payment.module';
+import { SocketAuthGuardModule } from './socket-auth-guard/socket-auth-guard.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { PaymentModule } from './payment/payment.module';
     PaymentModule,
     ChatModule,
     ClerkModule,
+    SocketAuthGuardModule,
   ],
   controllers: [UserController, AppController],
   providers: [

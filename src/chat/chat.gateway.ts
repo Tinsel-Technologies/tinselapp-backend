@@ -27,7 +27,7 @@ import {
   TypingDto,
   GetChatHistoryDto,
 } from './dto/chat.dto';
-import { AuthGuardService } from '../auth-guard/auth-guard.service';
+import { SocketAuthGuardService } from 'src/socket-auth-guard/socket-auth-guard.service';
 
 @WebSocketGateway({
   cors: {
@@ -37,7 +37,7 @@ import { AuthGuardService } from '../auth-guard/auth-guard.service';
   transports: ['websocket'],
   allowEIO3: true,
 })
-@UseGuards(AuthGuardService)
+@UseGuards(SocketAuthGuardService)
 @UsePipes(new ValidationPipe())
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
