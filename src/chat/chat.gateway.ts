@@ -26,7 +26,7 @@ import {
   GetChatHistoryDto,
 } from './dto/chat.dto';
 import { SocketAuthGuardService } from 'src/socket-auth-guard/socket-auth-guard.service';
-import { ClerkClient, User , verifyToken} from '@clerk/backend'; // Use the correct type from Clerk
+import { ClerkClient, User, verifyToken } from '@clerk/backend'; // Use the correct type from Clerk
 
 interface AuthenticatedSocket extends Socket {
   data: {
@@ -61,7 +61,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       const tokenPayload = await verifyToken(token, {
         secretKey: process.env.CLERK_SECRET_KEY,
-       clockSkewInMs: 60000,
+        clockSkewInMs: 60000,
       });
 
       const user = await this.clerkClient.users.getUser(tokenPayload.sub);
@@ -98,9 +98,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         }),
       });
 
-      this.logger.log(`User ${userId} (${user.firstName}) connected with socket ${client.id}`);
+      this.logger.log(
+        `User ${userId} (${user.firstName}) connected with socket ${client.id}`,
+      );
     } catch (error) {
-      this.logger.error(`Authentication failed for client ${client.id}: ${error.message}`);
+      this.logger.error(
+        `Authentication failed for client ${client.id}: ${error.message}`,
+      );
       client.emit('auth_error', { message: 'Authentication failed' });
       client.disconnect();
     }
@@ -123,15 +127,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  // Helper method to keep code DRY (copy from your guard)
   private extractTokenFromClient(client: Socket): string | null {
     const authHeader =
-      client.handshake.auth?.token ||
-      client.handshake.headers?.authorization;
+      client.handshake.auth?.token || client.handshake.headers?.authorization;
     if (authHeader?.startsWith('Bearer ')) {
       return authHeader.substring(7);
     }
-    return authHeader; // Also handle case where it's just the token
+    return authHeader;
   }
 
   @SubscribeMessage('createChatRoom')
@@ -140,14 +142,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
     try {
-      // CORRECTED: Get user directly from the socket
       const user = client.data.user;
       const userId = user.id;
 
       const { recipientId } = createChatRoomDto;
       const room = await this.chatService.createChatRoom(userId, recipientId);
 
-      // Make both users join the socket.io room
       await client.join(room.id);
       const recipientSocketId =
         this.chatService.getSocketIdFromUser(recipientId);
@@ -158,7 +158,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const otherParticipantId =
         room.participant1 === userId ? room.participant2 : room.participant1;
 
-      // Emit the created room to BOTH users
       this.server.to(room.id).emit('chatRoomCreated', {
         room: {
           ...room,
@@ -182,7 +181,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
     try {
-      // CORRECTED: Get user directly from the socket
       const user = client.data.user;
       const senderId = user.id;
 
@@ -196,7 +194,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       this.server.to(roomId).emit('newMessage', {
         ...chatMessage,
-        roomId, // Include roomId in the payload for client-side logic
+        roomId,
       });
 
       this.logger.log(`Message sent by ${senderId} in room ${roomId}`);
@@ -207,8 +205,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       });
     }
   }
-
-  // Apply the same correction for all other message handlers...
 
   @SubscribeMessage('editMessage')
   async handleEditMessage(
@@ -284,7 +280,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
     try {
-      const user = client.data.user; // CORRECTED
+      const user = client.data.user;
       if (!user) return;
 
       const { roomId, isTyping } = typingDto;

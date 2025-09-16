@@ -3,11 +3,12 @@ import {
   ForbiddenException,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UserService } from '../user/user.service';
 import { ChatRoom, Message, MessageType } from '@prisma/client';
-import { User } from '@clerk/express';
+import { User } from '@clerk/backend';
 
 export interface ChatRoomWithMessages extends ChatRoom {
   messages: Message[];
@@ -34,6 +35,7 @@ export interface MessageWithSender extends Message {
 
 @Injectable()
 export class ChatService {
+  private readonly logger = new Logger(ChatService.name);
   private userSockets: Map<string, string> = new Map();
   private socketUsers: Map<string, string> = new Map();
 
@@ -59,15 +61,30 @@ export class ChatService {
     return userId1 < userId2 ? [userId1, userId2] : [userId2, userId1];
   }
 
-  async canUsersChat(userId1: string, userId2: string): Promise<boolean> {
-    try {
-      const [user1CanChat, user2CanChat] = await Promise.all([
-        this.userService.isInChatList(userId1, userId2),
-        this.userService.isInChatList(userId2, userId1),
-      ]);
+  // async canUsersChat(userId1: string, userId2: string): Promise<boolean> {
+  //   try {
+  //     const [user1CanChat, user2CanChat] = await Promise.all([
+  //       this.userService.isInChatList(userId1, userId2),
+  //       this.userService.isInChatList(userId2, userId1),
+  //     ]);
 
-      return user1CanChat && user2CanChat;
+  //     return user1CanChat && user2CanChat;
+  //   } catch (error) {
+  //     return false;
+  //   }
+  // }
+
+  async canInitiateChat(
+    initiatorId: string,
+    recipientId: string,
+  ): Promise<boolean> {
+    try {
+      return await this.userService.isInChatList(initiatorId, recipientId);
     } catch (error) {
+      this.logger.error(
+        `Error checking chat permission for ${initiatorId} -> ${recipientId}:`,
+        error,
+      );
       return false;
     }
   }
@@ -104,16 +121,18 @@ export class ChatService {
   }
 
   async createChatRoom(
-    userId: string,
+    userId: string, // This is the initiator
     recipientId: string,
   ): Promise<ChatRoomWithMessages> {
     if (userId === recipientId) {
       throw new BadRequestException('Cannot create chat room with yourself');
     }
 
-    const canChat = await this.canUsersChat(userId, recipientId);
+    const canChat = await this.canInitiateChat(userId, recipientId);
     if (!canChat) {
-      throw new ForbiddenException("Users are not in each other's chat lists");
+      throw new ForbiddenException(
+        'You must follow the user to start a chat with them.',
+      );
     }
 
     const [participant1, participant2] = this.orderParticipants(
@@ -131,6 +150,7 @@ export class ChatService {
       include: {
         messages: {
           orderBy: { createdAt: 'asc' },
+          take: 50,
         },
       },
     });
@@ -146,6 +166,7 @@ export class ChatService {
           include: {
             messages: {
               orderBy: { createdAt: 'asc' },
+              take: 50,
             },
           },
         });
