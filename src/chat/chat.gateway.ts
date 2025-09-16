@@ -26,7 +26,7 @@ import {
   GetChatHistoryDto,
 } from './dto/chat.dto';
 import { SocketAuthGuardService } from 'src/socket-auth-guard/socket-auth-guard.service';
-import { ClerkClient, User, verifyToken } from '@clerk/backend'; // Use the correct type from Clerk
+import { ClerkClient, User, verifyToken } from '@clerk/backend';
 
 interface AuthenticatedSocket extends Socket {
   data: {
@@ -111,7 +111,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   async handleDisconnect(client: AuthenticatedSocket) {
-    // This logic remains the same
     const userId = this.chatService.unregisterUserSocket(client.id);
     if (userId) {
       this.logger.log(`User ${userId} disconnected`);
@@ -181,9 +180,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
     try {
-      const user = client.data.user;
-      const senderId = user.id;
-
+      const senderId = client.data.user.id;
       const { roomId, message, messageType } = sendMessageDto;
       const chatMessage = await this.chatService.sendMessage(
         senderId,
@@ -191,18 +188,21 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         message,
         messageType,
       );
-
       this.server.to(roomId).emit('newMessage', {
         ...chatMessage,
         roomId,
       });
-
       this.logger.log(`Message sent by ${senderId} in room ${roomId}`);
+      return { success: true, data: chatMessage };
     } catch (error) {
-      this.logger.error('Send message error:', error);
-      client.emit('error', {
-        message: error.message || 'Failed to send message',
-      });
+      this.logger.error(
+        `Send message error for user ${client.data.user?.id}:`,
+        error,
+      );
+      return {
+        success: false,
+        error: error.message || 'Failed to send message',
+      };
     }
   }
 
@@ -212,7 +212,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
     try {
-      const userId = client.data.user.id; // CORRECTED
+      const userId = client.data.user.id;
       const { roomId, messageId, newMessage } = editMessageDto;
       const editedMessage = await this.chatService.editMessage(
         userId,
@@ -236,7 +236,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
     try {
-      const userId = client.data.user.id; // CORRECTED
+      const userId = client.data.user.id;
       const { roomId, messageId } = deleteMessageDto;
       const deletedMessage = await this.chatService.deleteMessage(
         userId,
@@ -259,7 +259,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
     try {
-      const userId = client.data.user.id; // CORRECTED
+      const userId = client.data.user.id;
       const { roomId } = closeChatRoomDto;
       await this.chatService.closeChatRoom(userId, roomId);
       this.server
@@ -282,7 +282,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     try {
       const user = client.data.user;
       if (!user) return;
-
       const { roomId, isTyping } = typingDto;
       client.to(roomId).emit('userTyping', {
         userId: user.id,
@@ -296,8 +295,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         isTyping,
         roomId,
       });
+      return { success: true };
     } catch (error) {
-      this.logger.error('Typing error:', error);
+      this.logger.error('Typing error:', error.stack);
+      return { success: false, error: 'Failed to process typing event' };
     }
   }
 
