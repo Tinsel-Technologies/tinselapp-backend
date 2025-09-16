@@ -36,6 +36,10 @@ model Message {
 
   chatRoom ChatRoom @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
 
+  repliedToId String?
+  repliedTo   Message?  @relation("MessageReplies", fields: [repliedToId], references: [id], onDelete: NoAction)
+  replies     Message[] @relation("MessageReplies")
+
   @@map("messages")
 }
 

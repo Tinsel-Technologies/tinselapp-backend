@@ -31,6 +31,8 @@ export interface MessageWithSender extends Message {
     lastName: string | null;
     imageUrl: string;
   };
+
+  repliedTo?: MessageWithSender;
 }
 
 @Injectable()
@@ -44,12 +46,21 @@ export class ChatService {
     private readonly userService: UserService,
   ) {}
 
-  private extractUserInfo(user: User) {
+  private extractUserInfo(user: User | null) {
+    if (!user) {
+      return {
+        id: 'unknown_user',
+        username: 'Unknown User',
+        firstName: 'Unknown',
+        lastName: 'User',
+        imageUrl: '',
+      };
+    }
     return {
       id: user.id,
-      username: user.username,
-      firstName: user.firstName,
-      lastName: user.lastName,
+      username: user.username || 'No username',
+      firstName: user.firstName || '',
+      lastName: user.lastName || '',
       imageUrl: user.imageUrl || '',
     };
   }
@@ -121,7 +132,7 @@ export class ChatService {
   }
 
   async createChatRoom(
-    userId: string, // This is the initiator
+    userId: string,
     recipientId: string,
   ): Promise<ChatRoomWithMessages> {
     if (userId === recipientId) {
@@ -274,19 +285,14 @@ export class ChatService {
     roomId: string,
     message: string,
     messageType: MessageType = MessageType.TEXT,
+    repliedToId?: string,
   ): Promise<MessageWithSender> {
     const chatRoom = await this.prisma.chatRoom.findUnique({
       where: { id: roomId },
     });
-
-    if (!chatRoom) {
-      throw new NotFoundException('Chat room not found');
-    }
-
-    if (!chatRoom.isActive) {
+    if (!chatRoom) throw new NotFoundException('Chat room not found');
+    if (!chatRoom.isActive)
       throw new BadRequestException('Chat room is closed');
-    }
-
     if (
       chatRoom.participant1 !== senderId &&
       chatRoom.participant2 !== senderId
@@ -303,7 +309,9 @@ export class ChatService {
           senderId,
           message,
           messageType,
+          repliedToId,
         },
+        include: { repliedTo: true },
       }),
       this.prisma.chatRoom.update({
         where: { id: roomId },
@@ -312,10 +320,25 @@ export class ChatService {
     ]);
 
     const sender = await this.userService.getUser(senderId);
+    let repliedToSenderInfo:
+      | ReturnType<typeof this.extractUserInfo>
+      | undefined = undefined;
+    if (newMessage.repliedTo) {
+      const repliedToSender = await this.userService.getUser(
+        newMessage.repliedTo.senderId,
+      );
+      repliedToSenderInfo = this.extractUserInfo(repliedToSender);
+    }
 
     return {
       ...newMessage,
       senderInfo: this.extractUserInfo(sender),
+      repliedTo: newMessage.repliedTo
+        ? {
+            ...newMessage.repliedTo,
+            senderInfo: repliedToSenderInfo,
+          }
+        : undefined,
     };
   }
 
@@ -437,14 +460,20 @@ export class ChatService {
       orderBy: { createdAt: 'desc' },
       take: limit,
       skip: offset,
+      include: { repliedTo: true },
     });
 
-    // Get sender info for all messages
-    const senderIds = [...new Set(messages.map((msg) => msg.senderId))];
-    const senders = await Promise.all(
-      senderIds.map((id) => this.userService.getUser(id)),
-    );
+    const senderIds = new Set<string>();
+    messages.forEach((msg) => {
+      senderIds.add(msg.senderId);
+      if (msg.repliedTo) {
+        senderIds.add(msg.repliedTo.senderId);
+      }
+    });
 
+    const senders = await Promise.all(
+      Array.from(senderIds).map((id) => this.userService.getUser(id)),
+    );
     const sendersMap = new Map(
       senders.map((sender) => [sender.id, this.extractUserInfo(sender)]),
     );
@@ -452,6 +481,12 @@ export class ChatService {
     return messages.map((message) => ({
       ...message,
       senderInfo: sendersMap.get(message.senderId),
+      repliedTo: message.repliedTo
+        ? {
+            ...message.repliedTo,
+            senderInfo: sendersMap.get(message.repliedTo.senderId),
+          }
+        : undefined,
     }));
   }
 

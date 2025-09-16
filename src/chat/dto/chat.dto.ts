@@ -25,6 +25,10 @@ export class SendMessageDto {
   @IsEnum(MessageType)
   @IsOptional()
   messageType?: MessageType = MessageType.TEXT;
+
+  @IsString()
+  @IsOptional()
+  repliedToId?: string;
 }
 
 export class EditMessageDto {

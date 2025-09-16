@@ -8,13 +8,7 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import {
-  UseGuards,
-  UsePipes,
-  ValidationPipe,
-  Logger,
-  Inject,
-} from '@nestjs/common';
+import { UsePipes, ValidationPipe, Logger, Inject } from '@nestjs/common';
 import { ChatService } from './chat.service';
 import {
   CreateChatRoomDto,
@@ -25,7 +19,6 @@ import {
   TypingDto,
   GetChatHistoryDto,
 } from './dto/chat.dto';
-import { SocketAuthGuardService } from 'src/socket-auth-guard/socket-auth-guard.service';
 import { ClerkClient, User, verifyToken } from '@clerk/backend';
 
 interface AuthenticatedSocket extends Socket {
@@ -166,11 +159,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       });
 
       this.logger.log(`Chat room ${room.id} created by user ${userId}`);
+      return { success: true, data: room };
     } catch (error) {
-      this.logger.error('Create chat room error:', error);
-      client.emit('error', {
-        message: error.message || 'Failed to create chat room',
-      });
+      this.logger.error('Create chat room error:', error.stack);
+      return {
+        success: false,
+        error: error.message || 'Failed to create chat room',
+      };
     }
   }
 
@@ -181,23 +176,27 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     try {
       const senderId = client.data.user.id;
-      const { roomId, message, messageType } = sendMessageDto;
+      const { roomId, message, messageType, repliedToId } = sendMessageDto;
+
       const chatMessage = await this.chatService.sendMessage(
         senderId,
         roomId,
         message,
         messageType,
+        repliedToId,
       );
+
       this.server.to(roomId).emit('newMessage', {
         ...chatMessage,
         roomId,
       });
+
       this.logger.log(`Message sent by ${senderId} in room ${roomId}`);
       return { success: true, data: chatMessage };
     } catch (error) {
       this.logger.error(
         `Send message error for user ${client.data.user?.id}:`,
-        error,
+        error.stack,
       );
       return {
         success: false,
@@ -222,11 +221,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.server
         .to(roomId)
         .emit('messageEdited', { ...editedMessage, roomId });
+      return { success: true, data: editedMessage };
     } catch (error) {
-      this.logger.error('Edit message error:', error);
-      client.emit('error', {
-        message: error.message || 'Failed to edit message',
-      });
+      this.logger.error('Edit message error:', error.stack);
+      return {
+        success: false,
+        error: error.message || 'Failed to edit message',
+      };
     }
   }
 
@@ -245,11 +246,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.server
         .to(roomId)
         .emit('messageDeleted', { ...deletedMessage, roomId });
+      return { success: true, data: deletedMessage };
     } catch (error) {
-      this.logger.error('Delete message error:', error);
-      client.emit('error', {
-        message: error.message || 'Failed to delete message',
-      });
+      this.logger.error('Delete message error:', error.stack);
+      return {
+        success: false,
+        error: error.message || 'Failed to delete message',
+      };
     }
   }
 
@@ -261,16 +264,18 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     try {
       const userId = client.data.user.id;
       const { roomId } = closeChatRoomDto;
-      await this.chatService.closeChatRoom(userId, roomId);
+      const closedRoom = await this.chatService.closeChatRoom(userId, roomId);
       this.server
         .to(roomId)
         .emit('chatRoomClosed', { roomId, closedBy: userId });
       this.server.in(roomId).socketsLeave(roomId);
+      return { success: true, data: closedRoom };
     } catch (error) {
-      this.logger.error('Close chat room error:', error);
-      client.emit('error', {
-        message: error.message || 'Failed to close chat room',
-      });
+      this.logger.error('Close chat room error:', error.stack);
+      return {
+        success: false,
+        error: error.message || 'Failed to close chat room',
+      };
     }
   }
 
@@ -281,7 +286,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     try {
       const user = client.data.user;
-      if (!user) return;
+      if (!user) return; // Should not happen, but safe
       const { roomId, isTyping } = typingDto;
       client.to(roomId).emit('userTyping', {
         userId: user.id,
@@ -308,13 +313,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
     try {
-      const userId = client.data.user.id; // CORRECTED
+      const userId = client.data.user.id;
       const { roomId, limit = 50, offset = 0 } = getChatHistoryDto;
 
       const canAccess = await this.chatService.isUserInRoom(userId, roomId);
       if (!canAccess) {
-        client.emit('error', { message: 'Access denied to this chat room' });
-        return;
+        return {
+          success: false,
+          error: 'Access denied to this chat room',
+        };
       }
 
       const chatHistory = await this.chatService.getChatHistory(
@@ -323,14 +330,19 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         offset,
       );
 
-      client.emit('chatHistory', {
-        roomId,
-        messages: chatHistory,
-        hasMore: chatHistory.length === limit,
-      });
+      return {
+        success: true,
+        data: {
+          messages: chatHistory,
+          hasMore: chatHistory.length === limit,
+        },
+      };
     } catch (error) {
-      this.logger.error('Get chat history error:', error);
-      client.emit('error', { message: 'Failed to get chat history' });
+      this.logger.error('Get chat history error:', error.stack);
+      return {
+        success: false,
+        error: 'Failed to get chat history',
+      };
     }
   }
 }
