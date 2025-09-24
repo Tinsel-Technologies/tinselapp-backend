@@ -312,41 +312,50 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-// in src/chat/chat.gateway.ts
+  // in src/chat/chat.gateway.ts
 
-@SubscribeMessage('getChatHistory')
-async handleGetChatHistory(
-  @MessageBody() getChatHistoryDto: GetChatHistoryDto,
-  @ConnectedSocket() client: AuthenticatedSocket,
-) {
-  try {
-    const userId = client.data.user.id;
-    const { roomId } = getChatHistoryDto; 
+  // in src/chat/chat.gateway.ts
 
-    const canAccess = await this.chatService.isUserInRoom(userId, roomId);
-    if (!canAccess) {
+  @SubscribeMessage('getChatHistory')
+  async handleGetChatHistory(
+    @MessageBody() getChatHistoryDto: GetChatHistoryDto,
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ) {
+    try {
+      const userId = client.data.user.id;
+      const { roomId } = getChatHistoryDto;
+
+      const canAccess = await this.chatService.isUserInRoom(userId, roomId);
+      if (!canAccess) {
+        return {
+          success: false,
+          error: 'Access denied to this chat room',
+        };
+      }
+
+      const chatHistory = await this.chatService.getChatHistory(roomId);
+
+      // FIX: Convert complex Prisma objects into plain, serializable objects.
+      // This removes circular references and other non-JSON properties.
+      const serializableHistory = JSON.parse(JSON.stringify(chatHistory));
+
+      // For better debugging, log the stringified version
+      this.logger.log(
+        `Returning ${serializableHistory.length} messages to client.`,
+      );
+
+      return {
+        success: true,
+        data: {
+          messages: serializableHistory, // <-- Send the sanitized version
+        },
+      };
+    } catch (error) {
+      this.logger.error('Get chat history error:', error.stack);
       return {
         success: false,
-        error: 'Access denied to this chat room',
+        error: 'Failed to get chat history',
       };
     }
-
-    const chatHistory = await this.chatService.getChatHistory(roomId);
-    this.logger.log(
-      `${chatHistory}`
-    );
-    return {
-      success: true,
-      data: {
-        messages: chatHistory,
-      },
-    };
-  } catch (error) {
-    this.logger.error('Get chat history error:', error.stack);
-    return {
-      success: false,
-      error: 'Failed to get chat history',
-    };
   }
-}
 }
