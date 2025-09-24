@@ -13,6 +13,7 @@ import { ChatModule } from './chat/chat.module';
 import { ClerkModule } from './clerk/clerk.module';
 import { PaymentModule } from './payment/payment.module';
 import { SocketAuthGuardModule } from './socket-auth-guard/socket-auth-guard.module';
+import { UploadthingModule } from './uploadthing/uploadthing.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { SocketAuthGuardModule } from './socket-auth-guard/socket-auth-guard.mod
     ChatModule,
     ClerkModule,
     SocketAuthGuardModule,
+    UploadthingModule,
   ],
   controllers: [UserController, AppController],
   providers: [

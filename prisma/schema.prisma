@@ -27,6 +27,7 @@ model Message {
   chatRoomId  String
   senderId    String
   message     String
+  fileUrl     String?    
   messageType MessageType @default(TEXT)
   isEdited    Boolean     @default(false)
   isDeleted   Boolean     @default(false)
@@ -85,6 +86,8 @@ enum MessageType {
   TEXT
   IMAGE
   FILE
+  VIDEO
+  AUDIO
 }
 
 enum PaymentStatus {

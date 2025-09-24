@@ -283,9 +283,10 @@ export class ChatService {
   async sendMessage(
     senderId: string,
     roomId: string,
-    message: string,
+    message: string = '',
     messageType: MessageType = MessageType.TEXT,
     repliedToId?: string,
+    fileUrl?: string,
   ): Promise<MessageWithSender> {
     const chatRoom = await this.prisma.chatRoom.findUnique({
       where: { id: roomId },
@@ -308,6 +309,7 @@ export class ChatService {
           chatRoomId: roomId,
           senderId,
           message,
+          fileUrl,
           messageType,
           repliedToId,
         },
@@ -455,6 +457,10 @@ export class ChatService {
     limit: number = 50,
     offset: number = 0,
   ): Promise<MessageWithSender[]> {
+    this.logger.log(
+      `Getting chat history for room: ${roomId}, limit: ${limit}, offset: ${offset}`,
+    );
+
     const messages = await this.prisma.message.findMany({
       where: { chatRoomId: roomId },
       orderBy: { createdAt: 'desc' },
@@ -462,6 +468,12 @@ export class ChatService {
       skip: offset,
       include: { repliedTo: true },
     });
+
+    this.logger.log(`Found ${messages.length} raw messages from database`);
+
+    if (messages.length === 0) {
+      return [];
+    }
 
     const senderIds = new Set<string>();
     messages.forEach((msg) => {
@@ -488,7 +500,10 @@ export class ChatService {
           }
         : undefined,
     }));
-    return formattedMessages.reverse();
+
+    const result = formattedMessages.reverse();
+    this.logger.log(`Returning ${result.length} formatted messages`);
+    return result;
   }
 
   async getUserActiveChatRooms(

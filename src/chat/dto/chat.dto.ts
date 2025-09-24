@@ -19,8 +19,12 @@ export class SendMessageDto {
   roomId: string;
 
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   message: string;
+
+  @IsOptional()
+  @IsEnum(MessageType)
+  fileUrl: string;
 
   @IsEnum(MessageType)
   @IsOptional()

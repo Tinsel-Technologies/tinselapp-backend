@@ -176,14 +176,19 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     try {
       const senderId = client.data.user.id;
-      const { roomId, message, messageType, repliedToId } = sendMessageDto;
+      const { roomId, message, messageType, repliedToId, fileUrl } =
+        sendMessageDto;
 
+      if (!message?.trim() && !fileUrl) {
+        return { success: false, error: 'Cannot send an empty message.' };
+      }
       const chatMessage = await this.chatService.sendMessage(
         senderId,
         roomId,
         message,
         messageType,
         repliedToId,
+        fileUrl,
       );
 
       this.server.to(roomId).emit('newMessage', {
@@ -313,10 +318,22 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
     try {
-      const userId = client.data.user.id;
+      const userId = client.data.user?.id;
       const { roomId, limit = 50, offset = 0 } = getChatHistoryDto;
 
+      // Add debugging logs
+      this.logger.log(
+        `getChatHistory called by user: ${userId} for room: ${roomId}`,
+      );
+
+      if (!userId) {
+        this.logger.error('User not authenticated');
+        return { success: false, error: 'User not authenticated' };
+      }
+
       const canAccess = await this.chatService.isUserInRoom(userId, roomId);
+      this.logger.log(`User ${userId} can access room ${roomId}: ${canAccess}`);
+
       if (!canAccess) {
         return {
           success: false,
@@ -328,6 +345,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         roomId,
         limit,
         offset,
+      );
+
+      this.logger.log(
+        `Found ${chatHistory.length} messages for room ${roomId}`,
       );
 
       return {
