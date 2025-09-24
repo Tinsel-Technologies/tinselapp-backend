@@ -452,15 +452,12 @@ export class ChatService {
     });
   }
 
-  // in src/chat/chat.service.ts
-
   async getChatHistory(roomId: string): Promise<MessageWithSender[]> {
-    // Signature and return type changed
     this.logger.log(`Getting ALL chat history for room: ${roomId}`);
 
     const messages = await this.prisma.message.findMany({
       where: { chatRoomId: roomId },
-      orderBy: { createdAt: 'asc' }, // Fetch in chronological order directly
+      orderBy: { createdAt: 'asc' },
       include: { repliedTo: true },
     });
 
@@ -502,7 +499,6 @@ export class ChatService {
     return formattedMessages; // No longer need to reverse
   }
 
-  
   async getUserActiveChatRooms(
     userId: string,
   ): Promise<ChatRoomWithMessages[]> {

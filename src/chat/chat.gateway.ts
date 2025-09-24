@@ -312,10 +312,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  // in src/chat/chat.gateway.ts
-
-  // in src/chat/chat.gateway.ts
-
   @SubscribeMessage('getChatHistory')
   async handleGetChatHistory(
     @MessageBody() getChatHistoryDto: GetChatHistoryDto,
@@ -334,20 +330,18 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       }
 
       const chatHistory = await this.chatService.getChatHistory(roomId);
-
-      // FIX: Convert complex Prisma objects into plain, serializable objects.
-      // This removes circular references and other non-JSON properties.
       const serializableHistory = JSON.parse(JSON.stringify(chatHistory));
-
-      // For better debugging, log the stringified version
       this.logger.log(
         `Returning ${serializableHistory.length} messages to client.`,
+      );
+      this.logger.log(
+        `Returning ${serializableHistory} messages to client.`,
       );
 
       return {
         success: true,
         data: {
-          messages: serializableHistory, // <-- Send the sanitized version
+          messages: serializableHistory, 
         },
       };
     } catch (error) {
