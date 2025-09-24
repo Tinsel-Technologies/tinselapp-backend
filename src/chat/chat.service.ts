@@ -452,38 +452,26 @@ export class ChatService {
     });
   }
 
-  async getChatHistory(
-    roomId: string,
-    limit: number = 50,
-    offset: number = 0,
-  ): Promise<{ messages: MessageWithSender[]; hasMore: boolean }> {
-    this.logger.log(
-      `Getting chat history for room: ${roomId}, limit: ${limit}, offset: ${offset}`,
-    );
+  // in src/chat/chat.service.ts
 
-    const messagesToFetch = limit + 1;
+  async getChatHistory(roomId: string): Promise<MessageWithSender[]> {
+    // Signature and return type changed
+    this.logger.log(`Getting ALL chat history for room: ${roomId}`);
 
     const messages = await this.prisma.message.findMany({
       where: { chatRoomId: roomId },
-      orderBy: { createdAt: 'desc' },
-      take: messagesToFetch,
-      skip: offset,
+      orderBy: { createdAt: 'asc' }, // Fetch in chronological order directly
       include: { repliedTo: true },
     });
 
-    this.logger.log(
-      `Found ${messages.length} raw messages from database (requested ${messagesToFetch})`,
-    );
+    this.logger.log(`Found ${messages.length} raw messages from database`);
 
-    const hasMore = messages.length > limit;
-
-    const resultMessages = hasMore ? messages.slice(0, limit) : messages;
-
-    if (resultMessages.length === 0) {
-      return { messages: [], hasMore: false };
+    if (messages.length === 0) {
+      return [];
     }
+
     const senderIds = new Set<string>();
-    resultMessages.forEach((msg) => {
+    messages.forEach((msg) => {
       senderIds.add(msg.senderId);
       if (msg.repliedTo) {
         senderIds.add(msg.repliedTo.senderId);
@@ -497,7 +485,7 @@ export class ChatService {
       senders.map((sender) => [sender.id, this.extractUserInfo(sender)]),
     );
 
-    const formattedMessages = resultMessages.map((message) => ({
+    const formattedMessages = messages.map((message) => ({
       ...message,
       senderInfo: sendersMap.get(message.senderId),
       repliedTo: message.repliedTo
@@ -508,14 +496,13 @@ export class ChatService {
         : undefined,
     }));
 
-    const finalMessages = formattedMessages.reverse();
     this.logger.log(
-      `Returning ${finalMessages.length} formatted messages with hasMore: ${hasMore}`,
+      `Returning ${formattedMessages.length} formatted messages.`,
     );
-
-    return { messages: finalMessages, hasMore };
+    return formattedMessages; // No longer need to reverse
   }
 
+  
   async getUserActiveChatRooms(
     userId: string,
   ): Promise<ChatRoomWithMessages[]> {

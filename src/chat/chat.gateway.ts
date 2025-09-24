@@ -312,76 +312,41 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  @SubscribeMessage('getChatHistory')
-  async handleGetChatHistory(
-    @MessageBody() getChatHistoryDto: GetChatHistoryDto,
-    @ConnectedSocket() client: AuthenticatedSocket,
-  ) {
-    this.logger.log(
-      `[DEBUG] getChatHistory event received. DTO: ${JSON.stringify(
-        getChatHistoryDto,
-      )}`,
-    );
+// in src/chat/chat.gateway.ts
 
-    try {
-      const user = client.data.user;
-      if (!user || !user.id) {
-        this.logger.error(
-          '[DEBUG] Authentication check FAILED: client.data.user is not set.',
-        );
-        return {
-          success: false,
-          error: 'Authentication failed: User data not found on socket.',
-        };
-      }
-      const userId = user.id;
-      this.logger.log(`[DEBUG] Authenticated user ID: ${userId}`);
+@SubscribeMessage('getChatHistory')
+async handleGetChatHistory(
+  @MessageBody() getChatHistoryDto: GetChatHistoryDto,
+  @ConnectedSocket() client: AuthenticatedSocket,
+) {
+  try {
+    const userId = client.data.user.id;
+    const { roomId } = getChatHistoryDto; 
 
-      const { roomId, limit = 50, offset = 0 } = getChatHistoryDto;
-
-      this.logger.log(
-        `[DEBUG] Checking access for user ${userId} in room ${roomId}...`,
-      );
-      const canAccess = await this.chatService.isUserInRoom(userId, roomId);
-      this.logger.log(`[DEBUG] Access check result: ${canAccess}`);
-
-      if (!canAccess) {
-        this.logger.warn(
-          `[DEBUG] Access DENIED for user ${userId} in room ${roomId}.`,
-        );
-        return {
-          success: false,
-          error: 'Access denied to this chat room',
-        };
-      }
-
-      this.logger.log(
-        `[DEBUG] Calling chatService.getChatHistory for room ${roomId}...`,
-      );
-      const chatHistoryData = await this.chatService.getChatHistory(
-        roomId,
-        limit,
-        offset,
-      );
-      this.logger.log(
-        `[DEBUG] chatService.getChatHistory returned. Found ${chatHistoryData.messages.length} messages.`,
-      );
-
-      this.logger.log(`[DEBUG] Sending successful response to client.', ${chatHistoryData}`);
-      return {
-        success: true,
-        data: chatHistoryData,
-      };
-    } catch (error) {
-      this.logger.error(
-        '[DEBUG] CRITICAL ERROR in getChatHistory handler:',
-        error.stack,
-      );
+    const canAccess = await this.chatService.isUserInRoom(userId, roomId);
+    if (!canAccess) {
       return {
         success: false,
-        error: 'A critical server error occurred while fetching chat history.',
-        details: error.message,
+        error: 'Access denied to this chat room',
       };
     }
+
+    const chatHistory = await this.chatService.getChatHistory(roomId);
+    this.logger.log(
+      `${chatHistory}`
+    );
+    return {
+      success: true,
+      data: {
+        messages: chatHistory,
+      },
+    };
+  } catch (error) {
+    this.logger.error('Get chat history error:', error.stack);
+    return {
+      success: false,
+      error: 'Failed to get chat history',
+    };
   }
+}
 }

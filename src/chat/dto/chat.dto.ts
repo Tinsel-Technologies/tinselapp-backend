@@ -71,10 +71,4 @@ export class GetChatHistoryDto {
   @IsString()
   @IsNotEmpty()
   roomId: string;
-
-  @IsOptional()
-  limit?: number = 50;
-
-  @IsOptional()
-  offset?: number = 0;
 }
