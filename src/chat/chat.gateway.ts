@@ -318,22 +318,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
     try {
-      const userId = client.data.user?.id;
+      const userId = client.data.user.id;
       const { roomId, limit = 50, offset = 0 } = getChatHistoryDto;
 
-      // Add debugging logs
-      this.logger.log(
-        `getChatHistory called by user: ${userId} for room: ${roomId}`,
-      );
-
-      if (!userId) {
-        this.logger.error('User not authenticated');
-        return { success: false, error: 'User not authenticated' };
-      }
-
       const canAccess = await this.chatService.isUserInRoom(userId, roomId);
-      this.logger.log(`User ${userId} can access room ${roomId}: ${canAccess}`);
-
       if (!canAccess) {
         return {
           success: false,
@@ -341,22 +329,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         };
       }
 
-      const chatHistory = await this.chatService.getChatHistory(
+      const chatHistoryData = await this.chatService.getChatHistory(
         roomId,
         limit,
         offset,
       );
 
-      this.logger.log(
-        `Found ${chatHistory.length} messages for room ${roomId}`,
-      );
-
       return {
         success: true,
-        data: {
-          messages: chatHistory,
-          hasMore: chatHistory.length === limit,
-        },
+        data: chatHistoryData, 
       };
     } catch (error) {
       this.logger.error('Get chat history error:', error.stack);
