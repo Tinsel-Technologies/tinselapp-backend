@@ -478,7 +478,7 @@ export class ChatService {
       senders.map((sender) => [sender.id, this.extractUserInfo(sender)]),
     );
 
-    return messages.map((message) => ({
+    const formattedMessages = messages.map((message) => ({
       ...message,
       senderInfo: sendersMap.get(message.senderId),
       repliedTo: message.repliedTo
@@ -488,6 +488,7 @@ export class ChatService {
           }
         : undefined,
     }));
+    return formattedMessages.reverse();
   }
 
   async getUserActiveChatRooms(

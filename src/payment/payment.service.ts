@@ -175,7 +175,6 @@ export class PaymentService {
 
       console.log('Parsed payment response:', result);
 
-      // Storing the payment in the database
       if (result.CheckoutRequestID) {
         await this.prisma.payment.create({
           data: {
