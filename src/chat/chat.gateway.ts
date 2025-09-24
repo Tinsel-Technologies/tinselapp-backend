@@ -291,7 +291,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     try {
       const user = client.data.user;
-      if (!user) return; // Should not happen, but safe
+      if (!user) return;
       const { roomId, isTyping } = typingDto;
       client.to(roomId).emit('userTyping', {
         userId: user.id,
@@ -323,33 +323,38 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       const canAccess = await this.chatService.isUserInRoom(userId, roomId);
       if (!canAccess) {
-        return {
+        const errorResponse = {
           success: false,
           error: 'Access denied to this chat room',
         };
+        client.emit('getChatHistoryResponse', errorResponse);
+        return errorResponse;
       }
 
       const chatHistory = await this.chatService.getChatHistory(roomId);
       const serializableHistory = JSON.parse(JSON.stringify(chatHistory));
-      this.logger.log(
-        `Returning ${serializableHistory.length} messages to client.`,
-      );
+
       this.logger.log(
         `Returning ${serializableHistory} messages to client.`,
       );
 
-      return {
+      const successResponse = {
         success: true,
         data: {
-          messages: serializableHistory, 
+          messages: serializableHistory,
         },
       };
+
+      client.emit('getChatHistoryResponse', successResponse);
+      return successResponse;
     } catch (error) {
       this.logger.error('Get chat history error:', error.stack);
-      return {
+      const errorResponse = {
         success: false,
         error: 'Failed to get chat history',
       };
+      client.emit('getChatHistoryResponse', errorResponse);
+      return errorResponse;
     }
   }
 }
