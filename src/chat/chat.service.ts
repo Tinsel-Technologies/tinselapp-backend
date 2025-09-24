@@ -456,27 +456,34 @@ export class ChatService {
     roomId: string,
     limit: number = 50,
     offset: number = 0,
-  ): Promise<MessageWithSender[]> {
+  ): Promise<{ messages: MessageWithSender[]; hasMore: boolean }> {
     this.logger.log(
       `Getting chat history for room: ${roomId}, limit: ${limit}, offset: ${offset}`,
     );
 
+    const messagesToFetch = limit + 1;
+
     const messages = await this.prisma.message.findMany({
       where: { chatRoomId: roomId },
       orderBy: { createdAt: 'desc' },
-      take: limit,
+      take: messagesToFetch,
       skip: offset,
       include: { repliedTo: true },
     });
 
-    this.logger.log(`Found ${messages.length} raw messages from database`);
+    this.logger.log(
+      `Found ${messages.length} raw messages from database (requested ${messagesToFetch})`,
+    );
 
-    if (messages.length === 0) {
-      return [];
+    const hasMore = messages.length > limit;
+
+    const resultMessages = hasMore ? messages.slice(0, limit) : messages;
+
+    if (resultMessages.length === 0) {
+      return { messages: [], hasMore: false };
     }
-
     const senderIds = new Set<string>();
-    messages.forEach((msg) => {
+    resultMessages.forEach((msg) => {
       senderIds.add(msg.senderId);
       if (msg.repliedTo) {
         senderIds.add(msg.repliedTo.senderId);
@@ -490,7 +497,7 @@ export class ChatService {
       senders.map((sender) => [sender.id, this.extractUserInfo(sender)]),
     );
 
-    const formattedMessages = messages.map((message) => ({
+    const formattedMessages = resultMessages.map((message) => ({
       ...message,
       senderInfo: sendersMap.get(message.senderId),
       repliedTo: message.repliedTo
@@ -501,9 +508,12 @@ export class ChatService {
         : undefined,
     }));
 
-    const result = formattedMessages.reverse();
-    this.logger.log(`Returning ${result.length} formatted messages`);
-    return result;
+    const finalMessages = formattedMessages.reverse();
+    this.logger.log(
+      `Returning ${finalMessages.length} formatted messages with hasMore: ${hasMore}`,
+    );
+
+    return { messages: finalMessages, hasMore };
   }
 
   async getUserActiveChatRooms(
