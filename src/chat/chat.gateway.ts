@@ -367,7 +367,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         `[DEBUG] chatService.getChatHistory returned. Found ${chatHistoryData.messages.length} messages.`,
       );
 
-      this.logger.log('[DEBUG] Sending successful response to client.');
+      this.logger.log(`[DEBUG] Sending successful response to client.', ${chatHistoryData}`);
       return {
         success: true,
         data: chatHistoryData,
