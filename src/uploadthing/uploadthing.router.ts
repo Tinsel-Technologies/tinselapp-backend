@@ -6,7 +6,7 @@ export const uploadRouter: FileRouter = {
   chatImage: f({
     image: {
       maxFileSize: '256MB',
-      maxFileCount: 1,
+      maxFileCount: 5,
     },
   }).onUploadComplete((data) => {
     console.log('Image upload completed', data);
