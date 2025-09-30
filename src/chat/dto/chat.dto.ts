@@ -23,8 +23,8 @@ export class SendMessageDto {
   @IsOptional()
   message: string;
 
-  @IsOptional()
   @IsString()
+  @IsOptional()
   fileUrl: string;
 
   @IsEnum(MessageType)
