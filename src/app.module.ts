@@ -13,7 +13,6 @@ import { ChatModule } from './chat/chat.module';
 import { ClerkModule } from './clerk/clerk.module';
 import { PaymentModule } from './payment/payment.module';
 import { SocketAuthGuardModule } from './socket-auth-guard/socket-auth-guard.module';
-import { UploadthingModule } from './uploadthing/uploadthing.module';
 import { ChatlistModule } from './chatlist/chatlist.module';
 
 @Module({
@@ -27,7 +26,6 @@ import { ChatlistModule } from './chatlist/chatlist.module';
     ChatModule,
     ClerkModule,
     SocketAuthGuardModule,
-    UploadthingModule,
     ChatlistModule,
   ],
   controllers: [UserController, AppController],

@@ -614,6 +614,161 @@ export class ChatService {
     });
   }
 
+  // Add to the existing ChatService class
+
+  private onlineUsers = new Map<string, { socketId: string; lastSeen: Date }>();
+
+  // Online/Offline Status Methods
+  setUserOnline(userId: string, socketId: string): void {
+    this.onlineUsers.set(userId, {
+      socketId,
+      lastSeen: new Date(),
+    });
+    this.registerUserSocket(userId, socketId);
+  }
+
+  setUserOffline(userId: string): Date {
+    const userInfo = this.onlineUsers.get(userId);
+    const lastSeen = new Date();
+
+    if (userInfo) {
+      this.onlineUsers.delete(userId);
+    }
+
+    return lastSeen;
+  }
+
+  getUserOnlineStatus(userIds: string[]) {
+    return userIds.map((userId) => ({
+      userId,
+      isOnline: this.onlineUsers.has(userId),
+      lastSeen: this.onlineUsers.get(userId)?.lastSeen || null,
+    }));
+  }
+
+  // Message Read Receipt Methods
+  async markMessageAsRead(messageId: string, userId: string) {
+    // Check if already read
+    const existingReceipt = await this.prisma.messageReadReceipt.findUnique({
+      where: {
+        messageId_userId: {
+          messageId,
+          userId,
+        },
+      },
+    });
+
+    if (existingReceipt) {
+      return existingReceipt;
+    }
+
+    const message = await this.prisma.message.findUnique({
+      where: { id: messageId },
+      include: { chatRoom: true },
+    });
+
+    if (!message) {
+      throw new NotFoundException('Message not found');
+    }
+
+    const isInRoom = await this.isUserInRoom(userId, message.chatRoomId);
+    if (!isInRoom) {
+      throw new ForbiddenException('Access denied to this message');
+    }
+
+    if (message.senderId === userId) {
+      return null;
+    }
+
+    const readReceipt = await this.prisma.messageReadReceipt.create({
+      data: {
+        messageId,
+        userId,
+        readAt: new Date(),
+      },
+    });
+
+    this.logger.log(`Message ${messageId} marked as read by user ${userId}`);
+    return readReceipt;
+  }
+
+  async getMessageReadReceipts(messageId: string) {
+    const readReceipts = await this.prisma.messageReadReceipt.findMany({
+      where: { messageId },
+      orderBy: { readAt: 'asc' },
+    });
+
+    if (readReceipts.length === 0) {
+      return [];
+    }
+
+    const userIds = readReceipts.map((receipt) => receipt.userId);
+    const users = await Promise.all(
+      userIds.map((id) => this.userService.getUser(id)),
+    );
+
+    const usersMap = new Map(
+      users.map((user) => [user.id, this.extractUserInfo(user)]),
+    );
+
+    return readReceipts.map((receipt) => ({
+      id: receipt.id,
+      messageId: receipt.messageId,
+      userId: receipt.userId,
+      readAt: receipt.readAt,
+      userInfo: usersMap.get(receipt.userId),
+    }));
+  }
+
+  async getUserRooms(userId: string) {
+    const chatRooms = await this.prisma.chatRoom.findMany({
+      where: {
+        OR: [{ participant1: userId }, { participant2: userId }],
+      },
+      select: { id: true },
+    });
+
+    return chatRooms;
+  }
+
+  async markAllMessagesAsRead(roomId: string, userId: string) {
+    const unreadMessages = await this.prisma.message.findMany({
+      where: {
+        chatRoomId: roomId,
+        senderId: { not: userId },
+        isDeleted: false,
+        readReceipts: {
+          none: {
+            userId: userId,
+          },
+        },
+      },
+      select: { id: true },
+    });
+
+    if (unreadMessages.length === 0) {
+      return [];
+    }
+
+    const readReceipts = await Promise.all(
+      unreadMessages.map((message) =>
+        this.prisma.messageReadReceipt.create({
+          data: {
+            messageId: message.id,
+            userId,
+            readAt: new Date(),
+          },
+        }),
+      ),
+    );
+
+    this.logger.log(
+      `Marked ${readReceipts.length} messages as read for user ${userId} in room ${roomId}`,
+    );
+
+    return readReceipts;
+  }
+
   async isUserInRoom(userId: string, roomId: string): Promise<boolean> {
     const room = await this.prisma.chatRoom.findFirst({
       where: {

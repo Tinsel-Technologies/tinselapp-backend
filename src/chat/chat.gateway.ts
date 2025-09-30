@@ -45,80 +45,284 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly clerkClient: ClerkClient,
   ) {}
 
-  async handleConnection(client: AuthenticatedSocket) {
-    try {
-      const token = this.extractTokenFromClient(client);
-      if (!token) {
-        throw new Error('No authentication token provided');
-      }
+async handleConnection(client: AuthenticatedSocket) {
+  try {
+    const token = this.extractTokenFromClient(client);
+    if (!token) {
+      throw new Error('No authentication token provided');
+    }
 
-      const tokenPayload = await verifyToken(token, {
-        secretKey: process.env.CLERK_SECRET_KEY,
-        clockSkewInMs: 60000,
+    const tokenPayload = await verifyToken(token, {
+      secretKey: process.env.CLERK_SECRET_KEY,
+      clockSkewInMs: 60000,
+    });
+
+    const user = await this.clerkClient.users.getUser(tokenPayload.sub);
+    client.data.user = user;
+    const userId = user.id;
+
+    this.chatService.setUserOnline(userId, client.id);
+    await client.join(`user_${userId}`);
+
+    const activeChatRooms = await this.chatService.getUserActiveChatRooms(userId);
+    
+    for (const room of activeChatRooms) {
+      await client.join(room.id);
+      const otherParticipant =
+        room.participant1 === userId ? room.participant2 : room.participant1;
+      
+      this.server.to(`user_${otherParticipant}`).emit('userStatusUpdate', {
+        userId,
+        isOnline: true,
+        timestamp: new Date(),
+        roomId: room.id,
+      });
+    }
+
+    client.emit('activeChatRooms', {
+      rooms: activeChatRooms.map((room) => {
+        const otherParticipantId =
+          room.participant1 === userId
+            ? room.participant2
+            : room.participant1;
+        return {
+          ...room,
+          otherParticipant: room.participantsInfo?.[otherParticipantId],
+          lastMessage: room.messages[0] || null,
+        };
+      }),
+    });
+
+    this.logger.log(
+      `User ${userId} (${user.firstName}) connected and marked as online`,
+    );
+  } catch (error) {
+    this.logger.error(
+      `Authentication failed for client ${client.id}: ${error.message}`,
+    );
+    client.emit('auth_error', { message: 'Authentication failed' });
+    client.disconnect();
+  }
+}
+
+async handleDisconnect(client: AuthenticatedSocket) {
+  const userId = this.chatService.getUserIdFromSocket(client.id);
+  if (userId) {
+    // Set user as offline
+    const lastSeen = this.chatService.setUserOffline(userId);
+    this.chatService.unregisterUserSocket(client.id);
+
+    // Get user's chat rooms and notify others
+    const activeChatRooms = await this.chatService.getUserActiveChatRooms(userId);
+    for (const room of activeChatRooms) {
+      const otherParticipant =
+        room.participant1 === userId ? room.participant2 : room.participant1;
+      
+      this.server.to(`user_${otherParticipant}`).emit('userStatusUpdate', {
+        userId,
+        isOnline: false,
+        lastSeen,
+        timestamp: new Date(),
+        roomId: room.id,
+      });
+    }
+
+    this.logger.log(`User ${userId} disconnected and marked as offline`);
+  }
+}
+
+// New WebSocket handlers for online status
+@SubscribeMessage('getUserOnlineStatus')
+async handleGetUserOnlineStatus(
+  @MessageBody() data: { userIds: string[] },
+  @ConnectedSocket() client: AuthenticatedSocket,
+) {
+  try {
+    const onlineStatus = this.chatService.getUserOnlineStatus(data.userIds);
+
+    const response = {
+      success: true,
+      data: { onlineStatus },
+    };
+
+    client.emit('userOnlineStatusResponse', response);
+    return response;
+  } catch (error) {
+    this.logger.error('Get user online status error:', error.stack);
+    const errorResponse = {
+      success: false,
+      error: 'Failed to get user online status',
+    };
+    client.emit('userOnlineStatusResponse', errorResponse);
+    return errorResponse;
+  }
+}
+
+@SubscribeMessage('markMessageAsRead')
+async handleMarkMessageAsRead(
+  @MessageBody() data: { messageId: string; roomId: string },
+  @ConnectedSocket() client: AuthenticatedSocket,
+) {
+  try {
+    const userId = client.data.user.id;
+    const { messageId, roomId } = data;
+
+    const canAccess = await this.chatService.isUserInRoom(userId, roomId);
+    if (!canAccess) {
+      const errorResponse = {
+        success: false,
+        error: 'Access denied to this chat room',
+      };
+      client.emit('markMessageAsReadResponse', errorResponse);
+      return errorResponse;
+    }
+
+    const readReceipt = await this.chatService.markMessageAsRead(messageId, userId);
+
+    if (readReceipt) {
+      const response = {
+        success: true,
+        data: { readReceipt },
+      };
+
+      client.to(roomId).emit('messageReadUpdate', {
+        messageId,
+        readBy: userId,
+        readAt: readReceipt.readAt,
+        userInfo: {
+          id: client.data.user.id,
+          username: client.data.user.username,
+          firstName: client.data.user.firstName,
+          lastName: client.data.user.lastName,
+          imageUrl: client.data.user.imageUrl,
+        },
       });
 
-      const user = await this.clerkClient.users.getUser(tokenPayload.sub);
-      client.data.user = user;
-      const userId = user.id;
+      client.emit('markMessageAsReadResponse', response);
+      return response;
+    }
 
-      this.chatService.registerUserSocket(userId, client.id);
-      await client.join(`user_${userId}`);
+    const response = {
+      success: true,
+      data: { readReceipt: null },
+    };
+    
+    client.emit('markMessageAsReadResponse', response);
+    return response;
 
-      const activeChatRooms =
-        await this.chatService.getUserActiveChatRooms(userId);
-      for (const room of activeChatRooms) {
-        await client.join(room.id);
-        const otherParticipant =
-          room.participant1 === userId ? room.participant2 : room.participant1;
-        if (this.chatService.isUserOnline(otherParticipant)) {
-          this.server
-            .to(`user_${otherParticipant}`)
-            .emit('userOnline', { userId, roomId: room.id });
-        }
-      }
+  } catch (error) {
+    this.logger.error('Mark message as read error:', error.stack);
+    const errorResponse = {
+      success: false,
+      error: 'Failed to mark message as read',
+    };
+    client.emit('markMessageAsReadResponse', errorResponse);
+    return errorResponse;
+  }
+}
 
-      client.emit('activeChatRooms', {
-        rooms: activeChatRooms.map((room) => {
-          const otherParticipantId =
-            room.participant1 === userId
-              ? room.participant2
-              : room.participant1;
-          return {
-            ...room,
-            otherParticipant: room.participantsInfo?.[otherParticipantId],
-            lastMessage: room.messages[0] || null,
-          };
-        }),
+@SubscribeMessage('getMessageReadReceipts')
+async handleGetMessageReadReceipts(
+  @MessageBody() data: { messageId: string; roomId: string },
+  @ConnectedSocket() client: AuthenticatedSocket,
+) {
+  try {
+    const userId = client.data.user.id;
+    const { messageId, roomId } = data;
+
+    const canAccess = await this.chatService.isUserInRoom(userId, roomId);
+    if (!canAccess) {
+      const errorResponse = {
+        success: false,
+        error: 'Access denied to this chat room',
+      };
+      client.emit('getMessageReadReceiptsResponse', errorResponse);
+      return errorResponse;
+    }
+
+    const readReceipts = await this.chatService.getMessageReadReceipts(messageId);
+
+    const response = {
+      success: true,
+      data: { 
+        messageId,
+        readReceipts 
+      },
+    };
+
+    client.emit('getMessageReadReceiptsResponse', response);
+    return response;
+
+  } catch (error) {
+    this.logger.error('Get message read receipts error:', error.stack);
+    const errorResponse = {
+      success: false,
+      error: 'Failed to get message read receipts',
+    };
+    client.emit('getMessageReadReceiptsResponse', errorResponse);
+    return errorResponse;
+  }
+}
+
+@SubscribeMessage('markAllMessagesAsRead')
+async handleMarkAllMessagesAsRead(
+  @MessageBody() data: { roomId: string },
+  @ConnectedSocket() client: AuthenticatedSocket,
+) {
+  try {
+    const userId = client.data.user.id;
+    const { roomId } = data;
+
+    const canAccess = await this.chatService.isUserInRoom(userId, roomId);
+    if (!canAccess) {
+      const errorResponse = {
+        success: false,
+        error: 'Access denied to this chat room',
+      };
+      client.emit('markAllMessagesAsReadResponse', errorResponse);
+      return errorResponse;
+    }
+
+    const readReceipts = await this.chatService.markAllMessagesAsRead(roomId, userId);
+
+    const response = {
+      success: true,
+      data: { 
+        roomId,
+        readCount: readReceipts.length,
+        readReceipts 
+      },
+    };
+
+    if (readReceipts.length > 0) {
+      client.to(roomId).emit('bulkMessageReadUpdate', {
+        roomId,
+        readBy: userId,
+        readCount: readReceipts.length,
+        readAt: new Date(),
+        userInfo: {
+          id: client.data.user.id,
+          username: client.data.user.username,
+          firstName: client.data.user.firstName,
+          lastName: client.data.user.lastName,
+          imageUrl: client.data.user.imageUrl,
+        },
       });
-
-      this.logger.log(
-        `User ${userId} (${user.firstName}) connected with socket ${client.id}`,
-      );
-    } catch (error) {
-      this.logger.error(
-        `Authentication failed for client ${client.id}: ${error.message}`,
-      );
-      client.emit('auth_error', { message: 'Authentication failed' });
-      client.disconnect();
     }
-  }
 
-  async handleDisconnect(client: AuthenticatedSocket) {
-    const userId = this.chatService.unregisterUserSocket(client.id);
-    if (userId) {
-      this.logger.log(`User ${userId} disconnected`);
-      const activeChatRooms =
-        await this.chatService.getUserActiveChatRooms(userId);
-      for (const room of activeChatRooms) {
-        const otherParticipant =
-          room.participant1 === userId ? room.participant2 : room.participant1;
-        this.server
-          .to(`user_${otherParticipant}`)
-          .emit('userOffline', { userId, roomId: room.id });
-      }
-    }
-  }
+    client.emit('markAllMessagesAsReadResponse', response);
+    return response;
 
+  } catch (error) {
+    this.logger.error('Mark all messages as read error:', error.stack);
+    const errorResponse = {
+      success: false,
+      error: 'Failed to mark messages as read',
+    };
+    client.emit('markAllMessagesAsReadResponse', errorResponse);
+    return errorResponse;
+  }
+}
   private extractTokenFromClient(client: Socket): string | null {
     const authHeader =
       client.handshake.auth?.token || client.handshake.headers?.authorization;
@@ -334,9 +538,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const chatHistory = await this.chatService.getChatHistory(roomId);
       const serializableHistory = JSON.parse(JSON.stringify(chatHistory));
 
-      this.logger.log(
-        `Returning ${serializableHistory} messages to client.`,
-      );
+      this.logger.log(`Returning ${serializableHistory} messages to client.`);
 
       const successResponse = {
         success: true,
@@ -357,4 +559,5 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return errorResponse;
     }
   }
+
 }

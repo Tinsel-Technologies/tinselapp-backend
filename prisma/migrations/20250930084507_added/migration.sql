@@ -1,5 +1,5 @@
 -- CreateEnum
-CREATE TYPE "public"."MessageType" AS ENUM ('TEXT', 'IMAGE', 'FILE');
+CREATE TYPE "public"."MessageType" AS ENUM ('TEXT', 'IMAGE', 'FILE', 'VIDEO', 'AUDIO');
 
 -- CreateEnum
 CREATE TYPE "public"."PaymentStatus" AS ENUM ('PENDING', 'COMPLETED', 'FAILED', 'CANCELLED');
@@ -18,11 +18,23 @@ CREATE TABLE "public"."chat_rooms" (
 );
 
 -- CreateTable
+CREATE TABLE "public"."message_read_receipts" (
+    "id" TEXT NOT NULL,
+    "messageId" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "readAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "message_read_receipts_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "public"."messages" (
     "id" TEXT NOT NULL,
     "chatRoomId" TEXT NOT NULL,
     "senderId" TEXT NOT NULL,
     "message" TEXT NOT NULL,
+    "fileUrl" TEXT,
     "messageType" "public"."MessageType" NOT NULL DEFAULT 'TEXT',
     "isEdited" BOOLEAN NOT NULL DEFAULT false,
     "isDeleted" BOOLEAN NOT NULL DEFAULT false,
@@ -74,6 +86,9 @@ CREATE TABLE "public"."payment_callbacks" (
 CREATE UNIQUE INDEX "chat_rooms_participant1_participant2_key" ON "public"."chat_rooms"("participant1", "participant2");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "message_read_receipts_messageId_userId_key" ON "public"."message_read_receipts"("messageId", "userId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "payments_merchantRequestId_key" ON "public"."payments"("merchantRequestId");
 
 -- CreateIndex
@@ -81,6 +96,9 @@ CREATE UNIQUE INDEX "payments_checkoutRequestId_key" ON "public"."payments"("che
 
 -- CreateIndex
 CREATE UNIQUE INDEX "payment_callbacks_paymentId_key" ON "public"."payment_callbacks"("paymentId");
+
+-- AddForeignKey
+ALTER TABLE "public"."message_read_receipts" ADD CONSTRAINT "message_read_receipts_messageId_fkey" FOREIGN KEY ("messageId") REFERENCES "public"."messages"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."messages" ADD CONSTRAINT "messages_chatRoomId_fkey" FOREIGN KEY ("chatRoomId") REFERENCES "public"."chat_rooms"("id") ON DELETE CASCADE ON UPDATE CASCADE;

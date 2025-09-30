@@ -4,6 +4,7 @@ import {
   IsOptional,
   IsBoolean,
   IsEnum,
+  IsArray,
 } from 'class-validator';
 import { MessageType } from '@prisma/client';
 
@@ -70,5 +71,22 @@ export class TypingDto {
 export class GetChatHistoryDto {
   @IsString()
   @IsNotEmpty()
+  roomId: string;
+}
+
+
+export class GetUserOnlineStatusDto {
+  @IsArray()
+  @IsString({ each: true })
+  userIds: string[];
+}
+
+export class MarkMessageAsReadDto {
+  messageId: string;
+  roomId: string;
+}
+
+export class GetMessageReadReceiptsDto {
+  messageId: string;
   roomId: string;
 }
