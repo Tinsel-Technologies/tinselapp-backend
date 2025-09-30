@@ -24,7 +24,7 @@ export class SendMessageDto {
   message: string;
 
   @IsOptional()
-  @IsEnum(MessageType)
+  @IsString()
   fileUrl: string;
 
   @IsEnum(MessageType)

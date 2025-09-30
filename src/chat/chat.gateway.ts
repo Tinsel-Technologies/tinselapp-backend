@@ -386,6 +386,7 @@ async handleMarkAllMessagesAsRead(
       if (!message?.trim() && !fileUrl) {
         return { success: false, error: 'Cannot send an empty message.' };
       }
+
       const chatMessage = await this.chatService.sendMessage(
         senderId,
         roomId,
