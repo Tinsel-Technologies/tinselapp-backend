@@ -19,6 +19,7 @@ export class UploadthingController {
     });
   }
 
+  @All("*path")
   handleUploadThing(
     @Req() req: Request,
     @Res() res: Response,
