@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { UploadApiErrorResponse, UploadApiResponse, v2 as cloudinary } from 'cloudinary';
+import {
+  UploadApiErrorResponse,
+  UploadApiResponse,
+  v2 as cloudinary,
+} from 'cloudinary';
 import * as streamifier from 'streamifier';
 
 @Injectable()
@@ -19,7 +23,9 @@ export class CloudinaryService {
           if (result) {
             resolve(result);
           } else {
-            reject(new Error('Cloudinary upload failed without an error or result.'));
+            reject(
+              new Error('Cloudinary upload failed without an error or result.'),
+            );
           }
         },
       );
