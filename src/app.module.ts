@@ -14,7 +14,7 @@ import { ClerkModule } from './clerk/clerk.module';
 import { PaymentModule } from './payment/payment.module';
 import { SocketAuthGuardModule } from './socket-auth-guard/socket-auth-guard.module';
 import { ChatlistModule } from './chatlist/chatlist.module';
-import { UploadthingModule } from './uploadthing/uploadthing.module';
+import { CloudinaryModule } from './cloudinary/cloudinary.module';
 
 @Module({
   imports: [
@@ -28,7 +28,7 @@ import { UploadthingModule } from './uploadthing/uploadthing.module';
     ClerkModule,
     SocketAuthGuardModule,
     ChatlistModule,
-    UploadthingModule,
+    CloudinaryModule,
   ],
   controllers: [UserController, AppController],
   providers: [

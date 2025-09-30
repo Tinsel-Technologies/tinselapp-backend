@@ -31,7 +31,6 @@ interface AuthenticatedSocket extends Socket {
   cors: { origin: '*' },
   namespace: 'chat',
 })
-// @UseGuards(SocketAuthGuardService)
 @UsePipes(new ValidationPipe())
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
@@ -108,11 +107,8 @@ async handleConnection(client: AuthenticatedSocket) {
 async handleDisconnect(client: AuthenticatedSocket) {
   const userId = this.chatService.getUserIdFromSocket(client.id);
   if (userId) {
-    // Set user as offline
     const lastSeen = this.chatService.setUserOffline(userId);
     this.chatService.unregisterUserSocket(client.id);
-
-    // Get user's chat rooms and notify others
     const activeChatRooms = await this.chatService.getUserActiveChatRooms(userId);
     for (const room of activeChatRooms) {
       const otherParticipant =
@@ -131,7 +127,6 @@ async handleDisconnect(client: AuthenticatedSocket) {
   }
 }
 
-// New WebSocket handlers for online status
 @SubscribeMessage('getUserOnlineStatus')
 async handleGetUserOnlineStatus(
   @MessageBody() data: { userIds: string[] },
