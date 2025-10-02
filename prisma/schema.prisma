@@ -22,6 +22,17 @@ model ChatRoom {
   @@map("chat_rooms")
 }
 
+model UserStatus {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  isOnline  Boolean  @default(false)
+  lastSeen  DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("user_status")
+}
+
 model MessageReadReceipt {
   id        String   @id @default(cuid())
   messageId String

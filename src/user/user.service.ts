@@ -6,9 +6,12 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
+import { PrismaClient } from '@prisma/client';
 
 @Injectable()
 export class UserService {
+  private prisma = new PrismaClient();
+
   async getUsers(): Promise<PaginatedResourceResponse<User[]>> {
     try {
       return await clerkClient.users.getUserList({
@@ -644,7 +647,6 @@ export class UserService {
     }
   }
 
-
   async addMultipleUsersToChatList(
     userId: string,
     targetUserIds: string[],
@@ -746,7 +748,6 @@ export class UserService {
     }
   }
 
-
   async removeMultipleUsersFromChatList(
     userId: string,
     targetUserIds: string[],
@@ -823,6 +824,216 @@ export class UserService {
       }
       throw new InternalServerErrorException(
         'Failed to remove multiple users from chat list',
+      );
+    }
+  }
+
+  async setOnlineStatus(
+    userId: string,
+    isOnline: boolean,
+  ): Promise<{ success: boolean; message: string; status: any }> {
+    try {
+      await this.getUser(userId);
+
+      const status = await this.prisma.userStatus.upsert({
+        where: { userId },
+        update: {
+          isOnline,
+          lastSeen: new Date(),
+        },
+        create: {
+          userId,
+          isOnline,
+          lastSeen: new Date(),
+        },
+      });
+
+      return {
+        success: true,
+        message: `User status updated to ${isOnline ? 'online' : 'offline'}`,
+        status: {
+          userId: status.userId,
+          isOnline: status.isOnline,
+          lastSeen: status.lastSeen,
+        },
+      };
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to update online status');
+    }
+  }
+
+  async getOnlineStatus(userId: string): Promise<{
+    userId: string;
+    isOnline: boolean;
+    lastSeen: Date;
+  }> {
+    try {
+      await this.getUser(userId);
+
+      let status = await this.prisma.userStatus.findUnique({
+        where: { userId },
+      });
+
+      if (!status) {
+        status = await this.prisma.userStatus.create({
+          data: {
+            userId,
+            isOnline: false,
+            lastSeen: new Date(),
+          },
+        });
+      }
+
+      return {
+        userId: status.userId,
+        isOnline: status.isOnline,
+        lastSeen: status.lastSeen,
+      };
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to fetch online status');
+    }
+  }
+
+  async getBulkOnlineStatus(userIds: string[]): Promise<{
+    statuses: Array<{
+      userId: string;
+      isOnline: boolean;
+      lastSeen: Date;
+    }>;
+    summary: {
+      total: number;
+      online: number;
+      offline: number;
+    };
+  }> {
+    try {
+      const uniqueUserIds = [...new Set(userIds)];
+
+      const statuses = await this.prisma.userStatus.findMany({
+        where: {
+          userId: {
+            in: uniqueUserIds,
+          },
+        },
+      });
+
+      const statusMap = new Map(statuses.map((s) => [s.userId, s]));
+
+      const results = uniqueUserIds.map((userId) => {
+        const status = statusMap.get(userId);
+        return {
+          userId,
+          isOnline: status?.isOnline ?? false,
+          lastSeen: status?.lastSeen ?? new Date(),
+        };
+      });
+
+      const onlineCount = results.filter((s) => s.isOnline).length;
+
+      return {
+        statuses: results,
+        summary: {
+          total: results.length,
+          online: onlineCount,
+          offline: results.length - onlineCount,
+        },
+      };
+    } catch (error) {
+      throw new InternalServerErrorException(
+        'Failed to fetch bulk online status',
+      );
+    }
+  }
+
+  async getOnlineUsers(): Promise<{
+    users: User[];
+    count: number;
+  }> {
+    try {
+      const onlineStatuses = await this.prisma.userStatus.findMany({
+        where: {
+          isOnline: true,
+        },
+      });
+
+      const onlineUserIds = onlineStatuses.map((s) => s.userId);
+
+      if (onlineUserIds.length === 0) {
+        return { users: [], count: 0 };
+      }
+
+      const users = await Promise.all(
+        onlineUserIds.map(async (userId) => {
+          try {
+            return await this.getUser(userId);
+          } catch (error) {
+            return null;
+          }
+        }),
+      );
+
+      const validUsers = users.filter((user) => user !== null) as User[];
+
+      return {
+        users: validUsers,
+        count: validUsers.length,
+      };
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to fetch online users');
+    }
+  }
+
+  async getChatListOnlineStatus(userId: string): Promise<{
+    chatListUsers: Array<{
+      user: User;
+      isOnline: boolean;
+      lastSeen: Date;
+    }>;
+    summary: {
+      total: number;
+      online: number;
+      offline: number;
+    };
+  }> {
+    try {
+      const chatListUsers = await this.getChatList(userId);
+
+      if (chatListUsers.length === 0) {
+        return {
+          chatListUsers: [],
+          summary: { total: 0, online: 0, offline: 0 },
+        };
+      }
+
+      const userIds = chatListUsers.map((user) => user.id);
+      const bulkStatus = await this.getBulkOnlineStatus(userIds);
+
+      const statusMap = new Map(bulkStatus.statuses.map((s) => [s.userId, s]));
+
+      const chatListWithStatus = chatListUsers.map((user) => {
+        const status = statusMap.get(user.id);
+        return {
+          user,
+          isOnline: status?.isOnline ?? false,
+          lastSeen: status?.lastSeen ?? new Date(),
+        };
+      });
+
+      const onlineCount = chatListWithStatus.filter(
+        (item) => item.isOnline,
+      ).length;
+
+      return {
+        chatListUsers: chatListWithStatus,
+        summary: {
+          total: chatListWithStatus.length,
+          online: onlineCount,
+          offline: chatListWithStatus.length - onlineCount,
+        },
+      };
+    } catch (error) {
+      throw new InternalServerErrorException(
+        'Failed to fetch chat list online status',
       );
     }
   }

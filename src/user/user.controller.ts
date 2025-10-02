@@ -27,6 +27,8 @@ import {
   GetChatListDto,
   BulkAddToChatListDto,
   BulkRemoveFromChatListDto,
+  UpdateOnlineStatusDto,
+  BulkOnlineStatusDto,
 } from './dto/user.dto';
 
 @Controller('/api/v1/user')
@@ -302,5 +304,50 @@ export class UserController {
       userId,
       bulkRemoveDto.targetUserIds,
     );
+  }
+
+  @Put('/:userId/status/online')
+  @HttpCode(HttpStatus.OK)
+  setOnlineStatus(
+    @Param('userId') userId: string,
+    @Body() updateStatusDto: UpdateOnlineStatusDto,
+  ) {
+    if (!userId) {
+      throw new BadRequestException('User ID is required');
+    }
+    return this.userService.setOnlineStatus(userId, updateStatusDto.isOnline);
+  }
+
+  @Get('/:userId/status/online')
+  @HttpCode(HttpStatus.OK)
+  getOnlineStatus(@Param('userId') userId: string) {
+    if (!userId) {
+      throw new BadRequestException('User ID is required');
+    }
+    return this.userService.getOnlineStatus(userId);
+  }
+
+  @Post('/status/bulk')
+  @HttpCode(HttpStatus.OK)
+  getBulkOnlineStatus(@Body() bulkStatusDto: BulkOnlineStatusDto) {
+    if (!bulkStatusDto.userIds || bulkStatusDto.userIds.length === 0) {
+      throw new BadRequestException('User IDs array is required');
+    }
+    return this.userService.getBulkOnlineStatus(bulkStatusDto.userIds);
+  }
+
+  @Get('/status/online-users')
+  @HttpCode(HttpStatus.OK)
+  getOnlineUsers() {
+    return this.userService.getOnlineUsers();
+  }
+
+  @Get('/:userId/chatlist/online-status')
+  @HttpCode(HttpStatus.OK)
+  getChatListOnlineStatus(@Param('userId') userId: string) {
+    if (!userId) {
+      throw new BadRequestException('User ID is required');
+    }
+    return this.userService.getChatListOnlineStatus(userId);
   }
 }

@@ -10,6 +10,7 @@ import {
   IsArray,
   ArrayNotEmpty,
   ArrayMaxSize,
+  IsBoolean,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 
@@ -106,4 +107,20 @@ export class BulkRemoveFromChatListDto {
   @IsString({ each: true })
   @ArrayMaxSize(10)
   targetUserIds: string[];
+}
+
+
+export class UpdateOnlineStatusDto {
+  @IsBoolean()
+  isOnline: boolean;
+}
+
+export class GetOnlineStatusDto {
+  userId: string;
+  isOnline: boolean;
+  lastSeen: Date;
+}
+
+export class BulkOnlineStatusDto {
+  userIds: string[];
 }
