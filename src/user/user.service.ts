@@ -81,6 +81,24 @@ export class UserService {
       throw new InternalServerErrorException('Failed to update user metadata');
     }
   }
+  async updateUserAboutMetadata(
+    userId: string,
+    params: AboutMetadata,
+  ): Promise<User> {
+    try {
+      const user = await this.getUser(userId);
+      const currentMetadata = (user.publicMetadata as any) || {};
+      return clerkClient.users.updateUserMetadata(userId, {
+        publicMetadata: {
+          ...currentMetadata,
+          about: params.about
+        },
+      });
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to update user metadata');
+    }
+  }
+
 
   async searchUsersByLocation(
     searchParams: SearchUsersParams,

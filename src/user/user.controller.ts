@@ -137,6 +137,20 @@ export class UserController {
     }
     return this.userService.updateUserMetadata(userId, updateMetadataDto);
   }
+  @Put('/:userId/about')
+  @HttpCode(HttpStatus.OK)
+  updateUserAboutMetadata(
+    @Param('userId') userId: string,
+    @Body() body: AboutMetadata,
+  ) {
+    if (!userId) {
+      throw new BadRequestException('User ID is required');
+    }
+    if (!body.about) {
+      throw new BadRequestException('At least one metadata field is required');
+    }
+    return this.userService.updateUserAboutMetadata(userId, body);
+  }
 
   @Post('checkUsername')
   @HttpCode(HttpStatus.OK)
