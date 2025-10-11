@@ -1,5 +1,4 @@
 interface UpdateUserMetadataParams {
-  username: string;
   location?: string;
   gender: string;
   dateOfBirth: string;
