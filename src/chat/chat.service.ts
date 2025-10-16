@@ -130,13 +130,6 @@ export class ChatService {
       throw new BadRequestException('Cannot create chat room with yourself');
     }
 
-    const canChat = await this.canInitiateChat(userId, recipientId);
-    if (!canChat) {
-      throw new ForbiddenException(
-        'You must follow the user to start a chat with them.',
-      );
-    }
-
     const [participant1, participant2] = this.orderParticipants(
       userId,
       recipientId,
@@ -187,6 +180,13 @@ export class ChatService {
         });
       }
     } else {
+      const canChat = await this.canInitiateChat(userId, recipientId);
+      if (!canChat) {
+        throw new ForbiddenException(
+          'You must follow the user to start a chat with them.',
+        );
+      }
+
       chatRoom = await this.prisma.chatRoom.create({
         data: {
           participant1,
@@ -787,4 +787,52 @@ export class ChatService {
     });
     return !!room;
   }
+
+  async reopenChatRoom(roomId: string): Promise<ChatRoomWithMessages> {
+  const chatRoom = await this.prisma.chatRoom.findUnique({
+    where: { id: roomId },
+    include: {
+      messages: {
+        orderBy: { createdAt: 'asc' },
+        take: 50,
+      },
+    },
+  });
+
+  if (!chatRoom) {
+    throw new NotFoundException('Chat room not found');
+  }
+
+  if (chatRoom.isActive) {
+    throw new BadRequestException('Chat room is already active');
+  }
+
+  const reopenedRoom = await this.prisma.chatRoom.update({
+    where: { id: roomId },
+    data: {
+      isActive: true,
+      lastActivity: new Date(),
+      closedAt: null,
+    },
+    include: {
+      messages: {
+        orderBy: { createdAt: 'asc' },
+        take: 50,
+      },
+    },
+  });
+
+  const [user1, user2] = await Promise.all([
+    this.userService.getUser(reopenedRoom.participant1),
+    this.userService.getUser(reopenedRoom.participant2),
+  ]);
+
+  return {
+    ...reopenedRoom,
+    participantsInfo: {
+      [reopenedRoom.participant1]: this.extractUserInfo(user1),
+      [reopenedRoom.participant2]: this.extractUserInfo(user2),
+    },
+  };
+}
 }
