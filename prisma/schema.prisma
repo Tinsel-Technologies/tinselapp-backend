@@ -8,13 +8,14 @@ datasource db {
 }
 
 model ChatRoom {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   participant1 String
   participant2 String
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  lastActivity DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  lastActivity DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  closedAt     DateTime?
 
   messages Message[]
 
@@ -65,7 +66,8 @@ model Message {
   repliedTo   Message?  @relation("MessageReplies", fields: [repliedToId], references: [id], onDelete: NoAction)
   replies     Message[] @relation("MessageReplies")
 
-  readReceipts MessageReadReceipt[]
+  readReceipts  MessageReadReceipt[]
+  contentCharge ContentCharge?
 
   @@map("messages")
 }
@@ -106,6 +108,132 @@ model PaymentCallback {
   payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
 
   @@map("payment_callbacks")
+}
+
+// Monetization Models
+model UserMonetizationSettings {
+  id        String  @id @default(cuid())
+  userId    String  @unique
+  isEnabled Boolean @default(false)
+
+  // Chat time tiers (MANDATORY if isEnabled=true)
+  chatTimeTiers ChatTimeTier[]
+
+  // Optional additional charges for media content
+  monetizeVoiceNotes Boolean @default(false)
+  voiceNotePrice     Float   @default(0) // Per second
+
+  monetizeImages Boolean @default(false)
+  imagePrice     Float   @default(0) // Per image
+
+  monetizeVideos Boolean @default(false)
+  videoPrice     Float   @default(0) // Per second
+
+  // Metadata
+  currency  String   @default("KES")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("user_monetization_settings")
+}
+
+model ChatTimeTier {
+  id         String @id @default(cuid())
+  settingsId String
+
+  durationMinutes Int // e.g., 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60
+  price           Float // Price for this duration
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  settings UserMonetizationSettings @relation(fields: [settingsId], references: [id], onDelete: Cascade)
+
+  @@unique([settingsId, durationMinutes])
+  @@index([settingsId])
+  @@map("chat_time_tiers")
+}
+
+model ChatSession {
+  id       String @id @default(cuid())
+  buyerId  String
+  sellerId String
+
+  durationMinutes Int   // Total purchased time
+  price           Float
+  currency        String @default("KES")
+
+  startTime DateTime
+  endTime   DateTime // Will be extended when resumed
+
+  // New fields for tracking actual usage
+  usedMinutes    Float   @default(0) // Actual time spent chatting
+  isPaused       Boolean @default(false)
+  lastActiveAt   DateTime? // Last message timestamp
+  pausedAt       DateTime? // When session was paused
+  resumedAt      DateTime? // When session was last resumed
+
+  isPaid Boolean   @default(false)
+  paidAt DateTime?
+
+  isActive    Boolean @default(true)
+  isCancelled Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  contentCharges ContentCharge[]
+
+  @@index([buyerId, isActive])
+  @@index([sellerId, isActive])
+  @@index([buyerId, sellerId, isActive])
+  @@map("chat_sessions")
+}
+
+model ContentCharge {
+  id          String      @id @default(cuid())
+  messageId   String      @unique
+  sessionId   String // Link to the chat session
+  senderId    String
+  recipientId String
+  contentType MessageType
+
+  // Pricing details (only for additional media charges)
+  basePrice   Float // Price per unit (0 for TEXT messages)
+  units       Float // For AUDIO/VIDEO=seconds, for IMAGE=1
+  totalAmount Float // basePrice * units
+
+  // Payment status
+  isPaid Boolean   @default(false)
+  paidAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  message Message     @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  session ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([recipientId, isPaid])
+  @@index([senderId, isPaid])
+  @@index([sessionId])
+  @@map("content_charges")
+}
+
+model UserBalance {
+  id               String @id @default(cuid())
+  userId           String @unique
+  availableBalance Float  @default(0) // Money user can withdraw
+  pendingBalance   Float  @default(0) // Money owed by others
+  totalEarnings    Float  @default(0) // Lifetime earnings
+  totalSpent       Float  @default(0) // Lifetime spending
+
+  currency    String   @default("KES")
+  lastUpdated DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("user_balances")
 }
 
 enum MessageType {

@@ -91,14 +91,13 @@ export class UserService {
       return clerkClient.users.updateUserMetadata(userId, {
         publicMetadata: {
           ...currentMetadata,
-          about: params.about
+          about: params.about,
         },
       });
     } catch (error) {
       throw new InternalServerErrorException('Failed to update user metadata');
     }
   }
-
 
   async searchUsersByLocation(
     searchParams: SearchUsersParams,
@@ -390,9 +389,6 @@ export class UserService {
     }
   }
 
-  /**
-   * Get user's chat list with user details
-   */
   async getChatList(userId: string): Promise<User[]> {
     try {
       const user = await this.getUser(userId);
@@ -432,14 +428,20 @@ export class UserService {
     }
   }
 
-  async isInChatList(userId: string, targetUserId: string): Promise<boolean> {
+  async isInChatList(
+    userId: string,
+    targetUserId: string,
+  ): Promise<{ isInList: boolean; error?: string }> {
     try {
       const user = await this.getUser(userId);
       const currentMetadata = (user.publicMetadata as any) || {};
       const chatList = currentMetadata.chatList || [];
-      return chatList.includes(targetUserId);
+      return { isInList: chatList.includes(targetUserId) };
     } catch (error) {
-      return false;
+      return {
+        isInList: false,
+        error: 'Failed to check chat list status',
+      };
     }
   }
 

@@ -15,6 +15,7 @@ import { PaymentModule } from './payment/payment.module';
 import { SocketAuthGuardModule } from './socket-auth-guard/socket-auth-guard.module';
 import { ChatlistModule } from './chatlist/chatlist.module';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
+import { MonetizationModule } from './monetization/monetization.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { CloudinaryModule } from './cloudinary/cloudinary.module';
     SocketAuthGuardModule,
     ChatlistModule,
     CloudinaryModule,
+    MonetizationModule,
   ],
   controllers: [UserController, AppController],
   providers: [

@@ -72,25 +72,16 @@ export class ChatService {
     return userId1 < userId2 ? [userId1, userId2] : [userId2, userId1];
   }
 
-  // async canUsersChat(userId1: string, userId2: string): Promise<boolean> {
-  //   try {
-  //     const [user1CanChat, user2CanChat] = await Promise.all([
-  //       this.userService.isInChatList(userId1, userId2),
-  //       this.userService.isInChatList(userId2, userId1),
-  //     ]);
-
-  //     return user1CanChat && user2CanChat;
-  //   } catch (error) {
-  //     return false;
-  //   }
-  // }
-
   async canInitiateChat(
     initiatorId: string,
     recipientId: string,
   ): Promise<boolean> {
     try {
-      return await this.userService.isInChatList(initiatorId, recipientId);
+      const result = await this.userService.isInChatList(
+        initiatorId,
+        recipientId,
+      );
+      return result.isInList;
     } catch (error) {
       this.logger.error(
         `Error checking chat permission for ${initiatorId} -> ${recipientId}:`,
@@ -173,7 +164,20 @@ export class ChatService {
           data: {
             isActive: true,
             lastActivity: new Date(),
+            closedAt: null,
           },
+          include: {
+            messages: {
+              orderBy: { createdAt: 'asc' },
+              take: 50,
+            },
+          },
+        });
+        this.logger.log(`Reopened chat room ${chatRoom?.id}`);
+      } else {
+        chatRoom = await this.prisma.chatRoom.update({
+          where: { id: chatRoom.id },
+          data: { lastActivity: new Date() },
           include: {
             messages: {
               orderBy: { createdAt: 'asc' },
@@ -194,6 +198,7 @@ export class ChatService {
           },
         },
       });
+      this.logger.log(`Created new chat room ${chatRoom.id}`);
     }
 
     const [user, recipient] = await Promise.all([
@@ -443,13 +448,21 @@ export class ChatService {
       );
     }
 
-    return await this.prisma.chatRoom.update({
+    if (!chatRoom.isActive) {
+      throw new BadRequestException('Chat room is already closed');
+    }
+
+    const closedRoom = await this.prisma.chatRoom.update({
       where: { id: roomId },
       data: {
         isActive: false,
+        closedAt: new Date(),
         lastActivity: new Date(),
       },
     });
+
+    this.logger.log(`Closed chat room ${roomId}`);
+    return closedRoom;
   }
 
   async getChatHistory(roomId: string): Promise<MessageWithSender[]> {
@@ -496,7 +509,7 @@ export class ChatService {
     this.logger.log(
       `Returning ${formattedMessages.length} formatted messages.`,
     );
-    return formattedMessages; // No longer need to reverse
+    return formattedMessages;
   }
 
   async getUserActiveChatRooms(
@@ -614,11 +627,8 @@ export class ChatService {
     });
   }
 
-  // Add to the existing ChatService class
-
   private onlineUsers = new Map<string, { socketId: string; lastSeen: Date }>();
 
-  // Online/Offline Status Methods
   setUserOnline(userId: string, socketId: string): void {
     this.onlineUsers.set(userId, {
       socketId,
@@ -646,9 +656,7 @@ export class ChatService {
     }));
   }
 
-  // Message Read Receipt Methods
   async markMessageAsRead(messageId: string, userId: string) {
-    // Check if already read
     const existingReceipt = await this.prisma.messageReadReceipt.findUnique({
       where: {
         messageId_userId: {
