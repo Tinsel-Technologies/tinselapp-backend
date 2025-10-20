@@ -8,7 +8,7 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { UsePipes, ValidationPipe, Logger, Inject } from '@nestjs/common';
+import { UsePipes, ValidationPipe, Logger, Inject, InternalServerErrorException, BadRequestException, NotFoundException } from '@nestjs/common';
 import { ChatService } from './chat.service';
 import {
   CreateChatRoomDto,
@@ -20,6 +20,7 @@ import {
   GetChatHistoryDto,
 } from './dto/chat.dto';
 import { ClerkClient, User, verifyToken } from '@clerk/backend';
+import { UpdateMonetizationSettingsDto } from 'src/monetization/dto/monetization.dto';
 
 interface AuthenticatedSocket extends Socket {
   data: {
@@ -568,4 +569,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return errorResponse;
     }
   }
+
+   
 }

@@ -36,6 +36,17 @@ export class MonetizationController {
     }
     return this.monetizationService.setMonetizationSettings(userId, dto);
   }
+  @Put('/:userId/settings')
+  @HttpCode(HttpStatus.OK)
+  updateMonetizationSettings(
+    @Param('userId') userId: string,
+    @Body() dto: UpdateMonetizationSettingsDto,
+  ) {
+    if (!userId) {
+      throw new BadRequestException('User ID is required');
+    }
+    return this.monetizationService.updateMonetizationSettings(userId, dto);
+  }
 
   @Get('/:userId/settings')
   @HttpCode(HttpStatus.OK)
@@ -55,7 +66,6 @@ export class MonetizationController {
     return this.monetizationService.getMonetizationInfo(userId);
   }
 
-  // Purchase chat time
   @Post('/chat-time/purchase')
   @HttpCode(HttpStatus.CREATED)
   purchaseChatTime(@Body() dto: PurchaseChatTimeDto & { buyerId: string }) {
@@ -174,7 +184,6 @@ export class MonetizationController {
     return this.monetizationService.updateSessionActivity(sessionId);
   }
 
-  // Cron job endpoint (protect this in production!)
   @Post('/sessions/auto-pause')
   @HttpCode(HttpStatus.OK)
   autoPauseInactiveSessions(

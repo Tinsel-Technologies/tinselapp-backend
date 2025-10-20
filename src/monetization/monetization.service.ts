@@ -69,31 +69,30 @@ export class MonetizationService {
     }
 
     try {
-      const settings =
-        await this.prisma.userMonetizationSettings.upsert({
-          where: { userId },
-          update: {
-            isEnabled: dto.isEnabled,
-            voiceNotePrice: dto.voiceNotePrice || 0,
-            imagePrice: dto.imagePrice || 0,
-            videoPrice: dto.videoPrice || 0,
-            monetizeVoiceNotes: dto.monetizeVoiceNotes || false,
-            monetizeImages: dto.monetizeImages || false,
-            monetizeVideos: dto.monetizeVideos || false,
-            currency: dto.currency || 'KES',
-          },
-          create: {
-            userId,
-            isEnabled: dto.isEnabled,
-            voiceNotePrice: dto.voiceNotePrice || 0,
-            imagePrice: dto.imagePrice || 0,
-            videoPrice: dto.videoPrice || 0,
-            monetizeVoiceNotes: dto.monetizeVoiceNotes || false,
-            monetizeImages: dto.monetizeImages || false,
-            monetizeVideos: dto.monetizeVideos || false,
-            currency: dto.currency || 'KES',
-          },
-        });
+      const settings = await this.prisma.userMonetizationSettings.upsert({
+        where: { userId },
+        update: {
+          isEnabled: dto.isEnabled,
+          voiceNotePrice: dto.voiceNotePrice || 0,
+          imagePrice: dto.imagePrice || 0,
+          videoPrice: dto.videoPrice || 0,
+          monetizeVoiceNotes: dto.monetizeVoiceNotes || false,
+          monetizeImages: dto.monetizeImages || false,
+          monetizeVideos: dto.monetizeVideos || false,
+          currency: dto.currency || 'KES',
+        },
+        create: {
+          userId,
+          isEnabled: dto.isEnabled,
+          voiceNotePrice: dto.voiceNotePrice || 0,
+          imagePrice: dto.imagePrice || 0,
+          videoPrice: dto.videoPrice || 0,
+          monetizeVoiceNotes: dto.monetizeVoiceNotes || false,
+          monetizeImages: dto.monetizeImages || false,
+          monetizeVideos: dto.monetizeVideos || false,
+          currency: dto.currency || 'KES',
+        },
+      });
 
       if (dto.chatTimeTiers && dto.chatTimeTiers.length > 0) {
         await this.prisma.chatTimeTier.deleteMany({
@@ -110,9 +109,7 @@ export class MonetizationService {
         });
       }
 
-      this.logger.log(
-        `Monetization settings updated for user ${userId}`,
-      );
+      this.logger.log(`Monetization settings updated for user ${userId}`);
 
       return {
         success: true,
@@ -131,11 +128,10 @@ export class MonetizationService {
    * Get user's monetization settings
    */
   async getMonetizationSettings(userId: string) {
-    const settings =
-      await this.prisma.userMonetizationSettings.findUnique({
-        where: { userId },
-        include: { chatTimeTiers: { where: { isActive: true } } },
-      });
+    const settings = await this.prisma.userMonetizationSettings.findUnique({
+      where: { userId },
+      include: { chatTimeTiers: { where: { isActive: true } } },
+    });
 
     if (!settings) {
       return {
@@ -154,11 +150,10 @@ export class MonetizationService {
    * Get monetization info for display (public)
    */
   async getMonetizationInfo(userId: string): Promise<MonetizationInfo> {
-    const settings =
-      await this.prisma.userMonetizationSettings.findUnique({
-        where: { userId },
-        include: { chatTimeTiers: { where: { isActive: true } } },
-      });
+    const settings = await this.prisma.userMonetizationSettings.findUnique({
+      where: { userId },
+      include: { chatTimeTiers: { where: { isActive: true } } },
+    });
 
     if (!settings || !settings.isEnabled) {
       return { isMonetized: false };
@@ -175,12 +170,8 @@ export class MonetizationService {
         voiceNotePrice: settings.monetizeVoiceNotes
           ? settings.voiceNotePrice
           : undefined,
-        imagePrice: settings.monetizeImages
-          ? settings.imagePrice
-          : undefined,
-        videoPrice: settings.monetizeVideos
-          ? settings.videoPrice
-          : undefined,
+        imagePrice: settings.monetizeImages ? settings.imagePrice : undefined,
+        videoPrice: settings.monetizeVideos ? settings.videoPrice : undefined,
         monetizeVoiceNotes: settings.monetizeVoiceNotes,
         monetizeImages: settings.monetizeImages,
         monetizeVideos: settings.monetizeVideos,
@@ -189,18 +180,16 @@ export class MonetizationService {
     };
   }
 
-
   async canSendMessage(
     senderId: string,
     recipientId: string,
     contentType: MessageType,
     durationSeconds?: number,
   ): Promise<ContentCostCalculation> {
-    const settings =
-      await this.prisma.userMonetizationSettings.findUnique({
-        where: { userId: recipientId },
-        include: { chatTimeTiers: { where: { isActive: true } } },
-      });
+    const settings = await this.prisma.userMonetizationSettings.findUnique({
+      where: { userId: recipientId },
+      include: { chatTimeTiers: { where: { isActive: true } } },
+    });
 
     if (!settings || !settings.isEnabled) {
       return {
@@ -226,9 +215,7 @@ export class MonetizationService {
 
     if (contentType === MessageType.AUDIO && settings.monetizeVoiceNotes) {
       if (!durationSeconds) {
-        throw new BadRequestException(
-          'Duration is required for voice notes',
-        );
+        throw new BadRequestException('Duration is required for voice notes');
       }
       const total = settings.voiceNotePrice * durationSeconds;
       additionalCost = {
@@ -239,10 +226,7 @@ export class MonetizationService {
         currency: settings.currency,
         description: `${durationSeconds} seconds @ ${settings.currency} ${settings.voiceNotePrice}/sec = ${settings.currency} ${total.toFixed(2)}`,
       };
-    } else if (
-      contentType === MessageType.IMAGE &&
-      settings.monetizeImages
-    ) {
+    } else if (contentType === MessageType.IMAGE && settings.monetizeImages) {
       additionalCost = {
         contentType,
         basePrice: settings.imagePrice,
@@ -251,10 +235,7 @@ export class MonetizationService {
         currency: settings.currency,
         description: `1 image @ ${settings.currency} ${settings.imagePrice.toFixed(2)}`,
       };
-    } else if (
-      contentType === MessageType.VIDEO &&
-      settings.monetizeVideos
-    ) {
+    } else if (contentType === MessageType.VIDEO && settings.monetizeVideos) {
       if (!durationSeconds) {
         throw new BadRequestException('Duration is required for videos');
       }
@@ -269,7 +250,6 @@ export class MonetizationService {
       };
     }
 
-    
     if (additionalCost) {
       const senderBalance = await this.prisma.userBalance.findUnique({
         where: { userId: senderId },
@@ -302,10 +282,9 @@ export class MonetizationService {
     contentType: MessageType,
     durationSeconds?: number,
   ) {
-    const settings =
-      await this.prisma.userMonetizationSettings.findUnique({
-        where: { userId: recipientId },
-      });
+    const settings = await this.prisma.userMonetizationSettings.findUnique({
+      where: { userId: recipientId },
+    });
 
     if (!settings || !settings.isEnabled) {
       return null;
@@ -322,24 +301,16 @@ export class MonetizationService {
       settings.monetizeVoiceNotes
     ) {
       if (!durationSeconds) {
-        throw new BadRequestException(
-          'Duration required for voice notes',
-        );
+        throw new BadRequestException('Duration required for voice notes');
       }
       basePrice = settings.voiceNotePrice;
       units = durationSeconds;
       totalAmount = basePrice * units;
-    } else if (
-      contentType === MessageType.IMAGE &&
-      settings.monetizeImages
-    ) {
+    } else if (contentType === MessageType.IMAGE && settings.monetizeImages) {
       basePrice = settings.imagePrice;
       units = 1;
       totalAmount = basePrice;
-    } else if (
-      contentType === MessageType.VIDEO &&
-      settings.monetizeVideos
-    ) {
+    } else if (contentType === MessageType.VIDEO && settings.monetizeVideos) {
       if (!durationSeconds) {
         throw new BadRequestException('Duration required for videos');
       }
@@ -352,21 +323,16 @@ export class MonetizationService {
 
     try {
       const result = await this.prisma.$transaction(async (tx) => {
-        
         const senderBalance = await tx.userBalance.findUnique({
           where: { userId: senderId },
         });
 
-        if (
-          !senderBalance ||
-          senderBalance.availableBalance < totalAmount
-        ) {
+        if (!senderBalance || senderBalance.availableBalance < totalAmount) {
           throw new BadRequestException(
             `Insufficient balance. Required: ${settings.currency} ${totalAmount}`,
           );
         }
 
-        
         await tx.userBalance.update({
           where: { userId: senderId },
           data: {
@@ -376,7 +342,6 @@ export class MonetizationService {
           },
         });
 
-        
         await tx.userBalance.upsert({
           where: { userId: recipientId },
           update: {
@@ -391,7 +356,6 @@ export class MonetizationService {
           },
         });
 
-        
         const charge = await tx.contentCharge.create({
           data: {
             messageId,
@@ -426,7 +390,6 @@ export class MonetizationService {
     }
   }
 
-
   async getUserBalance(userId: string) {
     const balance = await this.prisma.userBalance.findUnique({
       where: { userId },
@@ -456,10 +419,7 @@ export class MonetizationService {
         where.isActive = true;
         where.endTime = { gt: new Date() };
       } else {
-        where.OR = [
-          { isActive: false },
-          { endTime: { lte: new Date() } },
-        ];
+        where.OR = [{ isActive: false }, { endTime: { lte: new Date() } }];
       }
     }
 
@@ -489,10 +449,7 @@ export class MonetizationService {
         (s) => s.isActive && s.endTime > new Date(),
       ).length,
       sessionEarnings: sessions.reduce((sum, s) => sum + s.price, 0),
-      additionalCharges: charges.reduce(
-        (sum, c) => sum + c.totalAmount,
-        0,
-      ),
+      additionalCharges: charges.reduce((sum, c) => sum + c.totalAmount, 0),
     };
   }
 
@@ -512,26 +469,22 @@ export class MonetizationService {
       if (error.code === 'P2025') {
         throw new NotFoundException('Monetization settings not found');
       }
-      throw new InternalServerErrorException(
-        'Failed to disable monetization',
-      );
+      throw new InternalServerErrorException('Failed to disable monetization');
     }
   }
 
   /**
    * Cancel active session and refund remaining time
    */
-  
 
-    async purchaseChatTime(
+  async purchaseChatTime(
     buyerId: string,
     dto: PurchaseChatTimeDto,
   ): Promise<ChatSessionInfo> {
-    const settings =
-      await this.prisma.userMonetizationSettings.findUnique({
-        where: { userId: dto.sellerId },
-        include: { chatTimeTiers: true },
-      });
+    const settings = await this.prisma.userMonetizationSettings.findUnique({
+      where: { userId: dto.sellerId },
+      include: { chatTimeTiers: true },
+    });
 
     if (!settings || !settings.isEnabled) {
       throw new BadRequestException(
@@ -549,7 +502,6 @@ export class MonetizationService {
       );
     }
 
-    
     const existingSession = await this.prisma.chatSession.findFirst({
       where: {
         buyerId,
@@ -559,7 +511,10 @@ export class MonetizationService {
       },
     });
 
-    if (existingSession && existingSession.usedMinutes < existingSession.durationMinutes) {
+    if (
+      existingSession &&
+      existingSession.usedMinutes < existingSession.durationMinutes
+    ) {
       throw new BadRequestException(
         `You already have an active session with ${existingSession.durationMinutes - existingSession.usedMinutes} minutes remaining`,
       );
@@ -601,7 +556,7 @@ export class MonetizationService {
         });
 
         const startTime = new Date();
-        
+
         const session = await tx.chatSession.create({
           data: {
             buyerId,
@@ -610,12 +565,12 @@ export class MonetizationService {
             price: tier.price,
             currency: settings.currency,
             startTime,
-            endTime: startTime, 
+            endTime: startTime,
             isPaid: true,
             paidAt: new Date(),
             isActive: true,
             usedMinutes: 0,
-            isPaused: true, 
+            isPaused: true,
           },
         });
 
@@ -629,9 +584,7 @@ export class MonetizationService {
       return this.formatChatSessionInfo(result);
     } catch (error) {
       this.logger.error('Failed to purchase chat time:', error);
-      throw new InternalServerErrorException(
-        'Failed to complete purchase',
-      );
+      throw new InternalServerErrorException('Failed to complete purchase');
     }
   }
 
@@ -658,9 +611,7 @@ export class MonetizationService {
     }
 
     const now = new Date();
-    const newEndTime = new Date(
-      now.getTime() + remainingMinutes * 60 * 1000,
-    );
+    const newEndTime = new Date(now.getTime() + remainingMinutes * 60 * 1000);
 
     const updatedSession = await this.prisma.chatSession.update({
       where: { id: sessionId },
@@ -692,18 +643,16 @@ export class MonetizationService {
     }
 
     if (session.buyerId !== userId && session.sellerId !== userId) {
-      throw new ForbiddenException(
-        'You are not part of this chat session',
-      );
+      throw new ForbiddenException('You are not part of this chat session');
     }
 
     if (session.isPaused) {
       throw new BadRequestException('Session is already paused');
     }
 
-    
     const now = new Date();
-    const lastActive = session.lastActiveAt || session.resumedAt || session.startTime;
+    const lastActive =
+      session.lastActiveAt || session.resumedAt || session.startTime;
     const minutesUsed = Math.max(
       0,
       (now.getTime() - lastActive.getTime()) / 60000,
@@ -745,15 +694,13 @@ export class MonetizationService {
 
     const now = new Date();
 
-    
     if (session.isPaused) {
       return this.activateSession(sessionId);
     }
 
-    
     if (now > session.endTime) {
-      
-      const lastActive = session.lastActiveAt || session.resumedAt || session.startTime;
+      const lastActive =
+        session.lastActiveAt || session.resumedAt || session.startTime;
       const minutesUsed = Math.min(
         session.durationMinutes - session.usedMinutes,
         (session.endTime.getTime() - lastActive.getTime()) / 60000,
@@ -771,7 +718,6 @@ export class MonetizationService {
       throw new BadRequestException('Session time has expired');
     }
 
-    
     const updatedSession = await this.prisma.chatSession.update({
       where: { id: sessionId },
       data: {
@@ -804,11 +750,10 @@ export class MonetizationService {
       return null;
     }
 
-    
     const now = new Date();
     if (!session.isPaused && now > session.endTime) {
-      
-      const lastActive = session.lastActiveAt || session.resumedAt || session.startTime;
+      const lastActive =
+        session.lastActiveAt || session.resumedAt || session.startTime;
       const minutesUsed = Math.min(
         session.durationMinutes - session.usedMinutes,
         (session.endTime.getTime() - lastActive.getTime()) / 60000,
@@ -833,9 +778,7 @@ export class MonetizationService {
    * Auto-pause session after inactivity (run via cron job)
    */
   async autoPauseInactiveSessions(inactivityMinutes: number = 5) {
-    const cutoffTime = new Date(
-      Date.now() - inactivityMinutes * 60 * 1000,
-    );
+    const cutoffTime = new Date(Date.now() - inactivityMinutes * 60 * 1000);
 
     const inactiveSessions = await this.prisma.chatSession.findMany({
       where: {
@@ -848,7 +791,8 @@ export class MonetizationService {
     for (const session of inactiveSessions) {
       try {
         const now = new Date();
-        const lastActive = session.lastActiveAt || session.resumedAt || session.startTime;
+        const lastActive =
+          session.lastActiveAt || session.resumedAt || session.startTime;
         const minutesUsed = (now.getTime() - lastActive.getTime()) / 60000;
         const totalUsed = session.usedMinutes + minutesUsed;
 
@@ -861,14 +805,9 @@ export class MonetizationService {
           },
         });
 
-        this.logger.log(
-          `Auto-paused inactive session: ${session.id}`,
-        );
+        this.logger.log(`Auto-paused inactive session: ${session.id}`);
       } catch (error) {
-        this.logger.error(
-          `Failed to auto-pause session ${session.id}:`,
-          error,
-        );
+        this.logger.error(`Failed to auto-pause session ${session.id}:`, error);
       }
     }
 
@@ -883,14 +822,10 @@ export class MonetizationService {
     let remaining = 0;
 
     if (session.isPaused) {
-      
-      remaining = Math.max(
-        0,
-        session.durationMinutes - session.usedMinutes,
-      );
+      remaining = Math.max(0, session.durationMinutes - session.usedMinutes);
     } else {
-      
-      const lastActive = session.lastActiveAt || session.resumedAt || session.startTime;
+      const lastActive =
+        session.lastActiveAt || session.resumedAt || session.startTime;
       const currentUsage = (now.getTime() - lastActive.getTime()) / 60000;
       remaining = Math.max(
         0,
@@ -907,7 +842,7 @@ export class MonetizationService {
       currency: session.currency,
       startTime: session.startTime,
       endTime: session.endTime,
-      remainingMinutes: Math.round(remaining * 100) / 100, 
+      remainingMinutes: Math.round(remaining * 100) / 100,
       usedMinutes: Math.round(session.usedMinutes * 100) / 100,
       isPaused: session.isPaused,
       isActive: session.isActive && remaining > 0,
@@ -928,29 +863,24 @@ export class MonetizationService {
     }
 
     if (session.buyerId !== userId && session.sellerId !== userId) {
-      throw new ForbiddenException(
-        'You are not part of this chat session',
-      );
+      throw new ForbiddenException('You are not part of this chat session');
     }
 
     if (!session.isActive) {
       throw new BadRequestException('Session is not active');
     }
 
-    
     const now = new Date();
     let totalUsed = session.usedMinutes;
 
     if (!session.isPaused) {
-      const lastActive = session.lastActiveAt || session.resumedAt || session.startTime;
+      const lastActive =
+        session.lastActiveAt || session.resumedAt || session.startTime;
       const currentUsage = (now.getTime() - lastActive.getTime()) / 60000;
       totalUsed += currentUsage;
     }
 
-    const remainingMinutes = Math.max(
-      0,
-      session.durationMinutes - totalUsed,
-    );
+    const remainingMinutes = Math.max(0, session.durationMinutes - totalUsed);
     const refundAmount =
       (session.price / session.durationMinutes) * remainingMinutes;
 
@@ -1001,8 +931,140 @@ export class MonetizationService {
       };
     } catch (error) {
       this.logger.error('Failed to cancel session:', error);
+      throw new InternalServerErrorException('Failed to cancel session');
+    }
+  }
+
+  /**
+   * Update user's monetization settings (partial update)
+   */
+  async updateMonetizationSettings(
+    userId: string,
+    dto: UpdateMonetizationSettingsDto,
+  ) {
+    // Check if settings exist
+    const existingSettings =
+      await this.prisma.userMonetizationSettings.findUnique({
+        where: { userId },
+        include: { chatTimeTiers: true },
+      });
+
+    if (!existingSettings) {
+      throw new NotFoundException(
+        'Monetization settings not found. Please set up monetization first.',
+      );
+    }
+
+    // Validate: if enabling, ensure chat time tiers exist or are provided
+    if (dto.isEnabled === true) {
+      const hasTiers =
+        (dto.chatTimeTiers && dto.chatTimeTiers.length > 0) ||
+        existingSettings.chatTimeTiers.length > 0;
+
+      if (!hasTiers) {
+        throw new BadRequestException(
+          'At least one chat time tier is required when monetization is enabled',
+        );
+      }
+    }
+
+    // Validate tiers if provided
+    if (dto.chatTimeTiers) {
+      for (const tier of dto.chatTimeTiers) {
+        if (tier.price <= 0) {
+          throw new BadRequestException(
+            `Price for ${tier.durationMinutes} minutes must be greater than 0`,
+          );
+        }
+      }
+    }
+
+    // Validate optional media charges
+    if (
+      dto.monetizeVoiceNotes === true &&
+      dto.voiceNotePrice !== undefined &&
+      dto.voiceNotePrice <= 0
+    ) {
+      throw new BadRequestException(
+        'Voice note price (per second) must be greater than 0',
+      );
+    }
+
+    if (
+      dto.monetizeImages === true &&
+      dto.imagePrice !== undefined &&
+      dto.imagePrice <= 0
+    ) {
+      throw new BadRequestException('Image price must be greater than 0');
+    }
+
+    if (
+      dto.monetizeVideos === true &&
+      dto.videoPrice !== undefined &&
+      dto.videoPrice <= 0
+    ) {
+      throw new BadRequestException(
+        'Video price (per second) must be greater than 0',
+      );
+    }
+
+    try {
+      // Build update data (only include provided fields)
+      const updateData: any = {};
+
+      if (dto.isEnabled !== undefined) updateData.isEnabled = dto.isEnabled;
+      if (dto.voiceNotePrice !== undefined)
+        updateData.voiceNotePrice = dto.voiceNotePrice;
+      if (dto.imagePrice !== undefined) updateData.imagePrice = dto.imagePrice;
+      if (dto.videoPrice !== undefined) updateData.videoPrice = dto.videoPrice;
+      if (dto.monetizeVoiceNotes !== undefined)
+        updateData.monetizeVoiceNotes = dto.monetizeVoiceNotes;
+      if (dto.monetizeImages !== undefined)
+        updateData.monetizeImages = dto.monetizeImages;
+      if (dto.monetizeVideos !== undefined)
+        updateData.monetizeVideos = dto.monetizeVideos;
+
+      // Update settings
+      const settings = await this.prisma.userMonetizationSettings.update({
+        where: { userId },
+        data: updateData,
+      });
+
+      // Handle chat time tiers if provided
+      if (dto.chatTimeTiers && dto.chatTimeTiers.length > 0) {
+        // Delete existing tiers
+        await this.prisma.chatTimeTier.deleteMany({
+          where: { settingsId: settings.id },
+        });
+
+        // Create new tiers
+        await this.prisma.chatTimeTier.createMany({
+          data: dto.chatTimeTiers.map((tier) => ({
+            settingsId: settings.id,
+            durationMinutes: tier.durationMinutes,
+            price: tier.price,
+            isActive: tier.isActive ?? true,
+          })),
+        });
+      }
+
+      this.logger.log(`Monetization settings updated for user ${userId}`);
+
+      return {
+        success: true,
+        message: 'Monetization settings updated successfully',
+        settings: await this.getMonetizationSettings(userId),
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      this.logger.error('Failed to update settings:', error);
       throw new InternalServerErrorException(
-        'Failed to cancel session',
+        'Failed to update monetization settings',
       );
     }
   }

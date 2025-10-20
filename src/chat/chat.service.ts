@@ -166,7 +166,7 @@ export class ChatService {
             },
           },
         });
-        this.logger.log(`Reopened chat room ${chatRoom?.id}`);
+        this.logger.log(`Reopened chat room ${chatRoom.id}`);
       } else {
         chatRoom = await this.prisma.chatRoom.update({
           where: { id: chatRoom.id },
@@ -789,50 +789,50 @@ export class ChatService {
   }
 
   async reopenChatRoom(roomId: string): Promise<ChatRoomWithMessages> {
-  const chatRoom = await this.prisma.chatRoom.findUnique({
-    where: { id: roomId },
-    include: {
-      messages: {
-        orderBy: { createdAt: 'asc' },
-        take: 50,
+    const chatRoom = await this.prisma.chatRoom.findUnique({
+      where: { id: roomId },
+      include: {
+        messages: {
+          orderBy: { createdAt: 'asc' },
+          take: 50,
+        },
       },
-    },
-  });
+    });
 
-  if (!chatRoom) {
-    throw new NotFoundException('Chat room not found');
-  }
+    if (!chatRoom) {
+      throw new NotFoundException('Chat room not found');
+    }
 
-  if (chatRoom.isActive) {
-    throw new BadRequestException('Chat room is already active');
-  }
+    if (chatRoom.isActive) {
+      throw new BadRequestException('Chat room is already active');
+    }
 
-  const reopenedRoom = await this.prisma.chatRoom.update({
-    where: { id: roomId },
-    data: {
-      isActive: true,
-      lastActivity: new Date(),
-      closedAt: null,
-    },
-    include: {
-      messages: {
-        orderBy: { createdAt: 'asc' },
-        take: 50,
+    const reopenedRoom = await this.prisma.chatRoom.update({
+      where: { id: roomId },
+      data: {
+        isActive: true,
+        lastActivity: new Date(),
+        closedAt: null,
       },
-    },
-  });
+      include: {
+        messages: {
+          orderBy: { createdAt: 'asc' },
+          take: 50,
+        },
+      },
+    });
 
-  const [user1, user2] = await Promise.all([
-    this.userService.getUser(reopenedRoom.participant1),
-    this.userService.getUser(reopenedRoom.participant2),
-  ]);
+    const [user1, user2] = await Promise.all([
+      this.userService.getUser(reopenedRoom.participant1),
+      this.userService.getUser(reopenedRoom.participant2),
+    ]);
 
-  return {
-    ...reopenedRoom,
-    participantsInfo: {
-      [reopenedRoom.participant1]: this.extractUserInfo(user1),
-      [reopenedRoom.participant2]: this.extractUserInfo(user2),
-    },
-  };
-}
+    return {
+      ...reopenedRoom,
+      participantsInfo: {
+        [reopenedRoom.participant1]: this.extractUserInfo(user1),
+        [reopenedRoom.participant2]: this.extractUserInfo(user2),
+      },
+    };
+  }
 }
