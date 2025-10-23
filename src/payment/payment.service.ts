@@ -122,7 +122,7 @@ export class PaymentService {
       PartyB: this.businessShortCode,
       PhoneNumber: formattedPhone,
       CallBackURL:
-        'https://1e97071afb58.ngrok-free.app/api/v1/pay/callback',
+        'https://tinsel-backend-app-e9iwg.ondigitalocean.app/api/v1/pay/callback',
       AccountReference: accountReference,
       TransactionDesc: `Payment of KES ${amount}`,
     };
