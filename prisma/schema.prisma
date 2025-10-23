@@ -72,64 +72,24 @@ model Message {
   @@map("messages")
 }
 
-model Payment {
-  id                  String        @id @default(cuid())
-  merchantRequestId   String?       @unique
-  checkoutRequestId   String?       @unique
-  amount              Float
-  phoneNumber         String
-  accountReference    String
-  transactionDesc     String
-  status              PaymentStatus @default(PENDING)
-  responseCode        String?
-  responseDescription String?
-  customerMessage     String?
-  createdAt           DateTime      @default(now())
-  updatedAt           DateTime      @updatedAt
 
-  callback PaymentCallback?
 
-  @@map("payments")
-}
-
-model PaymentCallback {
-  id                 String   @id @default(cuid())
-  paymentId          String   @unique
-  merchantRequestId  String
-  checkoutRequestId  String
-  resultCode         Int
-  resultDesc         String
-  amount             Float?
-  mpesaReceiptNumber String?
-  transactionDate    String?
-  phoneNumber        String?
-  createdAt          DateTime @default(now())
-
-  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
-
-  @@map("payment_callbacks")
-}
-
-// Monetization Models
 model UserMonetizationSettings {
   id        String  @id @default(cuid())
   userId    String  @unique
   isEnabled Boolean @default(false)
 
-  // Chat time tiers (MANDATORY if isEnabled=true)
   chatTimeTiers ChatTimeTier[]
 
-  // Optional additional charges for media content
   monetizeVoiceNotes Boolean @default(false)
-  voiceNotePrice     Float   @default(0) // Per second
+  voiceNotePrice     Float   @default(0) 
 
   monetizeImages Boolean @default(false)
-  imagePrice     Float   @default(0) // Per image
+  imagePrice     Float   @default(0) 
 
   monetizeVideos Boolean @default(false)
-  videoPrice     Float   @default(0) // Per second
+  videoPrice     Float   @default(0) 
 
-  // Metadata
   currency  String   @default("KES")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -141,8 +101,8 @@ model ChatTimeTier {
   id         String @id @default(cuid())
   settingsId String
 
-  durationMinutes Int // e.g., 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60
-  price           Float // Price for this duration
+  durationMinutes Int 
+  price           Float 
 
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -160,19 +120,18 @@ model ChatSession {
   buyerId  String
   sellerId String
 
-  durationMinutes Int   // Total purchased time
+  durationMinutes Int   
   price           Float
   currency        String @default("KES")
 
   startTime DateTime
-  endTime   DateTime // Will be extended when resumed
+  endTime   DateTime 
 
-  // New fields for tracking actual usage
-  usedMinutes    Float   @default(0) // Actual time spent chatting
+  usedMinutes    Float   @default(0) 
   isPaused       Boolean @default(false)
-  lastActiveAt   DateTime? // Last message timestamp
-  pausedAt       DateTime? // When session was paused
-  resumedAt      DateTime? // When session was last resumed
+  lastActiveAt   DateTime? 
+  pausedAt       DateTime? 
+  resumedAt      DateTime? 
 
   isPaid Boolean   @default(false)
   paidAt DateTime?
@@ -194,17 +153,15 @@ model ChatSession {
 model ContentCharge {
   id          String      @id @default(cuid())
   messageId   String      @unique
-  sessionId   String // Link to the chat session
+  sessionId   String 
   senderId    String
   recipientId String
   contentType MessageType
 
-  // Pricing details (only for additional media charges)
-  basePrice   Float // Price per unit (0 for TEXT messages)
-  units       Float // For AUDIO/VIDEO=seconds, for IMAGE=1
-  totalAmount Float // basePrice * units
+  basePrice   Float 
+  units       Float 
+  totalAmount Float 
 
-  // Payment status
   isPaid Boolean   @default(false)
   paidAt DateTime?
 
@@ -223,10 +180,10 @@ model ContentCharge {
 model UserBalance {
   id               String @id @default(cuid())
   userId           String @unique
-  availableBalance Float  @default(0) // Money user can withdraw
-  pendingBalance   Float  @default(0) // Money owed by others
-  totalEarnings    Float  @default(0) // Lifetime earnings
-  totalSpent       Float  @default(0) // Lifetime spending
+  availableBalance Float  @default(0) 
+  pendingBalance   Float  @default(0)
+  totalEarnings    Float  @default(0)
+  totalSpent       Float  @default(0) 
 
   currency    String   @default("KES")
   lastUpdated DateTime @default(now())
@@ -234,6 +191,46 @@ model UserBalance {
   updatedAt   DateTime @updatedAt
 
   @@map("user_balances")
+}
+
+model Payment {
+  id                  String        @id @default(cuid())
+  userId              String 
+  merchantRequestId   String?       @unique
+  checkoutRequestId   String?       @unique
+  amount              Float
+  phoneNumber         String
+  accountReference    String
+  transactionDesc     String
+  status              PaymentStatus @default(PENDING)
+  responseCode        String?
+  responseDescription String?
+  customerMessage     String?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  callback PaymentCallback?
+
+  @@index([userId]) 
+  @@map("payments")
+}
+
+model PaymentCallback {
+  id                 String   @id @default(cuid())
+  paymentId          String   @unique
+  merchantRequestId  String
+  checkoutRequestId  String
+  resultCode         Int
+  resultDesc         String
+  amount             Float?
+  mpesaReceiptNumber String?
+  transactionDate    String?
+  phoneNumber        String?
+  createdAt          DateTime @default(now())
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@map("payment_callbacks")
 }
 
 enum MessageType {

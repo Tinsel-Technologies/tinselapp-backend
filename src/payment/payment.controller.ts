@@ -1,15 +1,29 @@
-import { Body, Controller, Post, Get, Param } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Post,
+  Get,
+  Param,
+  UseGuards,
+  Req,
+} from '@nestjs/common';
 import { PaymentService, PaymentDto } from './payment.service';
 import { MpesaCallbackDto } from './dto/callback.dto';
+import { AuthGuardService } from 'src/auth-guard/auth-guard.service';
 
 @Controller('api/v1/pay')
 export class PaymentController {
   constructor(private readonly paymentService: PaymentService) {}
 
   @Post('mpesa')
-  async initiatePayment(@Body() paymentData: PaymentDto) {
+  @UseGuards(AuthGuardService)
+  async initiatePayment(@Body() paymentData: PaymentDto, @Req() req: Request) {
     try {
-      const result = await this.paymentService.mpesaPayment(paymentData);
+      const userId = (req as any).user.id;
+      const result = await this.paymentService.mpesaPayment(
+        paymentData,
+        userId,
+      );
 
       if (!result) {
         return {
@@ -85,6 +99,7 @@ export class PaymentController {
   }
 
   @Get('status/:checkoutRequestId')
+  @UseGuards(AuthGuardService)
   async getPaymentStatus(
     @Param('checkoutRequestId') checkoutRequestId: string,
   ) {

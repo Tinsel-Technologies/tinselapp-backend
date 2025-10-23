@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { MpesaCallbackDto, ProcessedCallback } from './dto/callback.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { PaymentStatus } from '@prisma/client';
@@ -43,6 +43,10 @@ export interface PaymentDto {
 
 @Injectable()
 export class PaymentService {
+
+    private readonly logger = new Logger(PaymentService.name);
+    
+    
   private readonly consumerKey =
     'aFAzQXhNOvd9TUdbuartDKESUiayrcGOJBUT36NWGTvpxAfU';
   private readonly consumerSecret =
@@ -96,6 +100,7 @@ export class PaymentService {
 
   async mpesaPayment(
     paymentData: PaymentDto,
+    userId:string
   ): Promise<PaymentResponse | ErrorResponse | null> {
     const { amount, phoneNumber } = paymentData;
 
@@ -117,7 +122,7 @@ export class PaymentService {
       PartyB: this.businessShortCode,
       PhoneNumber: formattedPhone,
       CallBackURL:
-        'https://tinsel-backend-app-e9iwg.ondigitalocean.app/api/v1/payment/callback',
+        'https://1e97071afb58.ngrok-free.app/api/v1/pay/callback',
       AccountReference: accountReference,
       TransactionDesc: `Payment of KES ${amount}`,
     };
@@ -178,6 +183,7 @@ export class PaymentService {
       if (result.CheckoutRequestID) {
         await this.prisma.payment.create({
           data: {
+            userId,
             merchantRequestId: result.MerchantRequestID,
             checkoutRequestId: result.CheckoutRequestID,
             amount,
@@ -209,7 +215,25 @@ export class PaymentService {
   ): Promise<ProcessedCallback> {
     const { stkCallback } = callbackData.Body;
 
-    console.log('Processing callback:', JSON.stringify(callbackData, null, 2));
+    console.log(
+      'Processing M-Pesa callback:',
+      JSON.stringify(stkCallback, null, 2),
+    );
+    const payment = await this.prisma.payment.findUnique({
+      where: { checkoutRequestId: stkCallback.CheckoutRequestID },
+    });
+
+    if (!payment) {
+      console.error(
+        `FATAL: Payment record not found for CheckoutRequestID: ${stkCallback.CheckoutRequestID}. Callback data will not be saved.`,
+      );
+      return {
+        merchantRequestId: stkCallback.MerchantRequestID,
+        checkoutRequestId: stkCallback.CheckoutRequestID,
+        resultCode: stkCallback.ResultCode,
+        resultDesc: 'Error: Original payment record not found.',
+      };
+    }
 
     const processedCallback: ProcessedCallback = {
       merchantRequestId: stkCallback.MerchantRequestID,
@@ -220,7 +244,6 @@ export class PaymentService {
 
     if (stkCallback.ResultCode === 0 && stkCallback.CallbackMetadata) {
       const metadata = stkCallback.CallbackMetadata.Item;
-
       metadata.forEach((item) => {
         switch (item.Name) {
           case 'Amount':
@@ -239,23 +262,19 @@ export class PaymentService {
       });
     }
 
+    const newStatus =
+      stkCallback.ResultCode === 0
+        ? PaymentStatus.COMPLETED
+        : PaymentStatus.FAILED;
+
     try {
-      const payment = await this.prisma.payment.findUnique({
-        where: { checkoutRequestId: stkCallback.CheckoutRequestID },
-      });
-
-      if (payment) {
-        const newStatus =
-          stkCallback.ResultCode === 0
-            ? PaymentStatus.COMPLETED
-            : PaymentStatus.FAILED;
-
-        await this.prisma.payment.update({
+      await this.prisma.$transaction(async (tx) => {
+        await tx.payment.update({
           where: { id: payment.id },
           data: { status: newStatus },
         });
 
-        await this.prisma.paymentCallback.create({
+        await tx.paymentCallback.create({
           data: {
             paymentId: payment.id,
             merchantRequestId: stkCallback.MerchantRequestID,
@@ -269,16 +288,33 @@ export class PaymentService {
           },
         });
 
-        console.log(`Payment ${payment.id} updated to status: ${newStatus}`);
+        if (newStatus === PaymentStatus.COMPLETED && payment.userId) {
+          await tx.userBalance.upsert({
+            where: { userId: payment.userId },
+            update: {
+              availableBalance: {
+                increment: processedCallback.amount,
+              },
+            },
+            create: {
+              userId: payment.userId,
+              availableBalance: processedCallback.amount,
+            },
+          });
+          this.logger.log(
+            `Updated balance for user ${payment.userId} by ${processedCallback.amount}`,
+          );
+        }
+      });
 
-    
-      } else {
-        console.warn(
-          `Payment not found for CheckoutRequestID: ${stkCallback.CheckoutRequestID}`,
-        );
-      }
+      this.logger.log(
+        `Successfully processed callback for Payment ${payment.id}. Status: ${newStatus}`,
+      );
     } catch (error) {
-      console.error('Error updating payment in database:', error);
+      console.error(
+        `Error during database transaction for CheckoutRequestID: ${stkCallback.CheckoutRequestID}`,
+        error,
+      );
     }
 
     return processedCallback;

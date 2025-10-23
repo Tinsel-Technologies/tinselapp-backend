@@ -4,12 +4,15 @@ import {
   ExecutionContext,
   UnauthorizedException,
   Inject,
+  Logger,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { ClerkClient, verifyToken } from '@clerk/backend';
 
 @Injectable()
 export class AuthGuardService implements CanActivate {
+
+    private readonly logger = new Logger(AuthGuardService.name);
   constructor(
     @Inject('ClerkClient')
     private readonly clerkClient: ClerkClient,
@@ -21,6 +24,11 @@ export class AuthGuardService implements CanActivate {
     const bearerToken = authHeader?.startsWith('Bearer ')
       ? authHeader.substring(7)
       : null;
+
+    if (bearerToken) {
+      console.log('Bearer Token for Postman:', bearerToken);
+      this.logger.log('Bearer Token for Postman:', bearerToken);
+    }
 
     if (!sessionToken && !bearerToken) {
       throw new UnauthorizedException('No authentication token provided');
