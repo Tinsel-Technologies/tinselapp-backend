@@ -117,7 +117,7 @@ export class PaymentService {
       PartyB: this.businessShortCode,
       PhoneNumber: formattedPhone,
       CallBackURL:
-        'https://tinselapp-backend-production.up.railway.app/api/v1/payment/callback',
+        'https://tinsel-backend-app-e9iwg.ondigitalocean.app/api/v1/payment/callback',
       AccountReference: accountReference,
       TransactionDesc: `Payment of KES ${amount}`,
     };
@@ -271,10 +271,7 @@ export class PaymentService {
 
         console.log(`Payment ${payment.id} updated to status: ${newStatus}`);
 
-        // Here you can add additional business logic:
-        // - Send notifications to users
-        // - Trigger webhooks
-        // - Update related records
+    
       } else {
         console.warn(
           `Payment not found for CheckoutRequestID: ${stkCallback.CheckoutRequestID}`,
