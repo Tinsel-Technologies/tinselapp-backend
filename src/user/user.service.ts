@@ -1,7 +1,8 @@
 import { PaginatedResourceResponse } from '@clerk/backend/dist/api/resources/Deserializer';
-import { clerkClient, User } from '@clerk/express';
+import { ClerkClient, User } from '@clerk/backend';
 import {
   BadRequestException,
+  Inject,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
@@ -12,9 +13,14 @@ import { PrismaClient } from '@prisma/client';
 export class UserService {
   private prisma = new PrismaClient();
 
+  constructor(
+    @Inject('ClerkClient')
+    private readonly clerkClient: ClerkClient,
+  ) {}
+
   async getUsers(): Promise<PaginatedResourceResponse<User[]>> {
     try {
-      return await clerkClient.users.getUserList({
+      return await this.clerkClient.users.getUserList({
         orderBy: '-last_active_at',
       });
     } catch (error) {
@@ -24,7 +30,7 @@ export class UserService {
 
   async getUser(userId: string): Promise<User> {
     try {
-      return await clerkClient.users.getUser(userId);
+      return await this.clerkClient.users.getUser(userId);
     } catch (error) {
       throw new InternalServerErrorException('Failed to fetch user');
     }
@@ -32,7 +38,7 @@ export class UserService {
 
   async editUsername(userId: string, username: string): Promise<User> {
     try {
-      return await clerkClient.users.updateUser(userId, {
+      return await this.clerkClient.users.updateUser(userId, {
         username: username,
       });
     } catch (error) {
@@ -42,7 +48,7 @@ export class UserService {
 
   async updateUserPassword(userId: string, password: string): Promise<User> {
     try {
-      return await clerkClient.users.updateUser(userId, {
+      return await this.clerkClient.users.updateUser(userId, {
         password: password,
         skipPasswordChecks: false,
       });
@@ -56,7 +62,7 @@ export class UserService {
     password: string,
   ): Promise<{ verified: true }> {
     try {
-      return await clerkClient.users.verifyPassword({ userId, password });
+      return await this.clerkClient.users.verifyPassword({ userId, password });
     } catch (error) {
       throw new InternalServerErrorException('Failed to fetch user');
     }
@@ -69,7 +75,7 @@ export class UserService {
     try {
       const user = await this.getUser(userId);
       const currentMetadata = (user.publicMetadata as any) || {};
-      return clerkClient.users.updateUserMetadata(userId, {
+      return this.clerkClient.users.updateUserMetadata(userId, {
         publicMetadata: {
           ...currentMetadata,
           location: params.location,
@@ -88,7 +94,7 @@ export class UserService {
     try {
       const user = await this.getUser(userId);
       const currentMetadata = (user.publicMetadata as any) || {};
-      return clerkClient.users.updateUserMetadata(userId, {
+      return this.clerkClient.users.updateUserMetadata(userId, {
         publicMetadata: {
           ...currentMetadata,
           about: params.about,
@@ -104,7 +110,7 @@ export class UserService {
   ): Promise<PaginatedResourceResponse<User[]>> {
     try {
       const { location, orderBy = '-last_active_at' } = searchParams;
-      return await clerkClient.users.getUserList({
+      return await this.clerkClient.users.getUserList({
         query: location,
         orderBy,
       });
@@ -120,7 +126,7 @@ export class UserService {
     suggestions?: string[];
   }> {
     try {
-      const existingUsers = await clerkClient.users.getUserList({
+      const existingUsers = await this.clerkClient.users.getUserList({
         username: [username],
       });
 
@@ -194,7 +200,7 @@ export class UserService {
 
   private async isUsernameAvailable(username: string): Promise<boolean> {
     try {
-      const existingUsers = await clerkClient.users.getUserList({
+      const existingUsers = await this.clerkClient.users.getUserList({
         username: [username],
       });
       return existingUsers.data.length === 0;
@@ -338,7 +344,7 @@ export class UserService {
       }
 
       const updatedChatList = [...chatList, targetUserId];
-      await clerkClient.users.updateUserMetadata(userId, {
+      await this.clerkClient.users.updateUserMetadata(userId, {
         publicMetadata: {
           ...currentMetadata,
           chatList: updatedChatList,
@@ -374,7 +380,7 @@ export class UserService {
         (id: string) => id !== targetUserId,
       );
 
-      await clerkClient.users.updateUserMetadata(userId, {
+      await this.clerkClient.users.updateUserMetadata(userId, {
         publicMetadata: {
           ...currentMetadata,
           chatList: updatedChatList,
@@ -414,7 +420,7 @@ export class UserService {
       ) as User[];
       if (validChatUsers.length !== chatList.length) {
         const validUserIds = validChatUsers.map((user) => user.id);
-        await clerkClient.users.updateUserMetadata(userId, {
+        await this.clerkClient.users.updateUserMetadata(userId, {
           publicMetadata: {
             ...currentMetadata,
             chatList: validUserIds,
@@ -467,7 +473,7 @@ export class UserService {
       if (chatList.length === 0) {
         return { success: false, message: 'Chat list is already empty' };
       }
-      await clerkClient.users.updateUserMetadata(userId, {
+      await this.clerkClient.users.updateUserMetadata(userId, {
         publicMetadata: {
           ...currentMetadata,
           chatList: [],
@@ -495,7 +501,7 @@ export class UserService {
       const femalesNeeded = Math.ceil(limit / 3);
       const malesNeeded = limit - femalesNeeded;
 
-      const allUsers = await clerkClient.users.getUserList({
+      const allUsers = await this.clerkClient.users.getUserList({
         orderBy: '-last_active_at',
         limit: 500,
       });
@@ -588,7 +594,7 @@ export class UserService {
 
       if (validChatUsers.length !== chatListIds.length) {
         const validUserIds = validChatUsers.map((user) => user.id);
-        await clerkClient.users.updateUserMetadata(userId, {
+        await this.clerkClient.users.updateUserMetadata(userId, {
           publicMetadata: {
             ...currentMetadata,
             chatList: validUserIds,
@@ -732,7 +738,7 @@ export class UserService {
       if (results.added.length > 0) {
         const updatedChatList = [...currentChatList, ...results.added];
 
-        await clerkClient.users.updateUserMetadata(userId, {
+        await this.clerkClient.users.updateUserMetadata(userId, {
           publicMetadata: {
             ...currentMetadata,
             chatList: updatedChatList,
@@ -813,7 +819,7 @@ export class UserService {
           (id: string) => !results.removed.includes(id),
         );
 
-        await clerkClient.users.updateUserMetadata(userId, {
+        await this.clerkClient.users.updateUserMetadata(userId, {
           publicMetadata: {
             ...currentMetadata,
             chatList: updatedChatList,
