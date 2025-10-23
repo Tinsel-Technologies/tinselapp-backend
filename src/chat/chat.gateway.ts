@@ -8,7 +8,12 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { UsePipes, ValidationPipe, Logger, Inject, InternalServerErrorException, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  UsePipes,
+  ValidationPipe,
+  Logger,
+  Inject,
+} from '@nestjs/common';
 import { ChatService } from './chat.service';
 import {
   CreateChatRoomDto,
@@ -532,8 +537,27 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
     try {
+      if (!client.data || !client.data.user || !client.data.user.id) {
+        this.logger.error('Socket client missing user data:', {
+          hasData: !!client.data,
+          hasUser: !!client.data?.user,
+          hasUserId: !!client.data?.user?.id,
+        });
+
+        const errorResponse = {
+          success: false,
+          error: 'Authentication required',
+        };
+        client.emit('getChatHistoryResponse', errorResponse);
+        return errorResponse;
+      }
+
       const userId = client.data.user.id;
       const { roomId } = getChatHistoryDto;
+
+      this.logger.debug(
+        `Getting chat history for user ${userId} in room ${roomId}`,
+      );
 
       const canAccess = await this.chatService.isUserInRoom(userId, roomId);
       if (!canAccess) {
@@ -548,7 +572,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const chatHistory = await this.chatService.getChatHistory(roomId);
       const serializableHistory = JSON.parse(JSON.stringify(chatHistory));
 
-      this.logger.log(`Returning ${serializableHistory} messages to client.`);
+      this.logger.log(
+        `Returning ${serializableHistory.length} messages to client.`,
+      );
 
       const successResponse = {
         success: true,
@@ -569,6 +595,4 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return errorResponse;
     }
   }
-
-   
 }
