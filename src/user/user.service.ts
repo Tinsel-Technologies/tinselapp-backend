@@ -31,8 +31,14 @@ export class UserService {
   async getUser(userId: string): Promise<User> {
     try {
       return await this.clerkClient.users.getUser(userId);
-    } catch (error) {
-      throw new InternalServerErrorException('Failed to fetch user');
+    } catch (error: any) {
+      if (error.status === 404 || error.message?.includes('not found')) {
+        throw new NotFoundException(`User with ID ${userId} not found`);
+      }
+      console.error(`Error fetching user ${userId}:`, error);
+      throw new InternalServerErrorException(
+        `Failed to fetch user ${userId}: ${error.message || 'Unknown error'}`,
+      );
     }
   }
 
