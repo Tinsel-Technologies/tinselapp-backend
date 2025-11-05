@@ -42,6 +42,7 @@ export interface PaymentDto {
 }
 
 interface B2CRequest {
+  OriginatorConversationID: string;
   InitiatorName: string;
   SecurityCredential: string;
   CommandID: string;
@@ -77,9 +78,8 @@ export class PaymentService {
   private readonly consumerSecret =
     'C8fUfAAFWnm8vqt4MNSGGezj93u0CXDTGiqIV8DJqLX7uXB6huyyux7ODWwpKTOf';
   private readonly businessShortCode = '4186271';
-  private readonly initiatorName = 'Tinsel';
-  private readonly securityCredential =
-    'lo2k6c3mnkw1P6MJ8pfpdy1ajH1tucnlR/b58rS+r0AWo2F1bqfseNJXr9QszewUGEg7/5IqPrz50XRcA9AjUygpHdDbOIDQER4t4HiRwoLGH2h95fr9UaUirffN3OmE4yLeWJYhQHlQMLlpnslAW+yol7gwxEpqkrtSr7tsBapa9kPJ18GHFyAZncNDqxjS+ERLXyQdK3fj6ZUptYXVTb5ATZbKEE+SK4qvkX1DOSJc9fMboFFzt/VkjIs8lgh8x4eWvjAO8s5afQhdYYgUwfTzBecUk2t3Pj9tRx67YOygWTgaj9rOibTwtPBqUo27BrJC2Wtd62lR8aC0NoGSag==';
+  private readonly initiatorName = 'Tinsel Technologies';
+  private readonly securityCredential = "MAn7SFxPP9wU90DaadtwZL5xmhBkkwTHqMmFQEoO+JIwKkx6KkEGP+9GMNlWzQeftGY7qZVADpbYL+T/IdMRBeYdcz5q/gXbx18CWyHj+TTIjRhKidgDNCed+bm9AWq1vQY2lTNRIjqzUqhN3Fv52NEN3xuIPiSIrnAuGRvhJRKj0NMEn9i6kS3s5xJSDbkwur2Xts0behP7cZgt0ZrxfWWq5PlpCkjd9jjzODrZG03/U/WegdnXjA8a5SrgQTttQIWxmkpuEk2yNgZKnRVbTUxcfCgU1zUepOYSd1gcPZ35S77+umd8+JWkv6HZwqIqSOawPQ1YlK9B0vvS2tB3tQ=="
   private readonly b2cQueueTimeOutURL =
     'https://tinsel-backend-app-e9iwg.ondigitalocean.app/api/v1/pay/b2c-timeout';
   private readonly b2cResultURL =
@@ -408,6 +408,7 @@ export class PaymentService {
     const formattedPhone = this.formatPhoneNumber(phoneNumber);
 
     const b2cRequest: B2CRequest = {
+      OriginatorConversationID: crypto.randomUUID(),
       InitiatorName: this.initiatorName,
       SecurityCredential: this.securityCredential,
       CommandID: 'SalaryPayment',
@@ -643,6 +644,7 @@ export class PaymentService {
     const formattedPhone = this.formatPhoneNumber(phoneNumber);
 
     const b2cRequest: B2CRequest = {
+      OriginatorConversationID: crypto.randomUUID(),
       InitiatorName: this.initiatorName,
       SecurityCredential: this.securityCredential,
       CommandID: 'BusinessPayment',
