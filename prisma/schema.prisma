@@ -233,6 +233,264 @@ model PaymentCallback {
   @@map("payment_callbacks")
 }
 
+model B2CTransaction {
+  id                            String              @id @default(cuid())
+  userId                        String              // Clerk userId (admin/company user initiating payment)
+  conversationId                String              @unique
+  originatorConversationId      String
+  amount                        Float
+  phoneNumber                   String              // Recipient phone number
+  remarks                       String
+  occasion                      String
+  commandID                     B2CCommandType      // SalaryPayment, BusinessPayment, PromotionPayment
+  responseCode                  String
+  responseDescription           String
+  status                        B2CTransactionStatus @default(PENDING)
+  
+  resultCode                    Int?
+  resultDesc                    String?
+  transactionId                 String?             // M-Pesa transaction ID
+  transactionReceipt            String?             // M-Pesa receipt number
+  recipientRegistered           String?             // Whether recipient is registered
+  charges                       Float?              // Transaction charges
+  transactionCompletedDateTime  String?             // When transaction completed
+  receiverPartyPublicName       String?             // Recipient name
+  
+  createdAt                     DateTime            @default(now())
+  updatedAt                     DateTime            @updatedAt
+
+  @@index([userId])
+  @@index([conversationId])
+  @@index([status])
+  @@map("b2c_transactions")
+}
+
+// Transaction Status Query Model (optional - for tracking status queries)
+model TransactionStatusQuery {
+  id               String   @id @default(cuid())
+  userId           String   // Clerk userId
+  transactionId    String   // Original M-Pesa transaction ID
+  conversationId   String?
+  queryResponse    Json?    // Store the full response
+  status           String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([userId])
+  @@index([transactionId])
+  @@map("transaction_status_queries")
+}
+
+// Account Balance Query Model (optional - for tracking balance queries)
+model AccountBalanceQuery {
+  id               String   @id @default(cuid())
+  userId           String   // Clerk userId (admin who queried)
+  conversationId   String?
+  workingBalance   Float?
+  utilityBalance   Float?   
+  chargesPaidBalance Float?
+  unClearedBalance Float?
+  queryResponse    Json?    // Store the full response
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([userId])
+  @@map("account_balance_queries")
+}
+
+model ServiceRequest {
+  id          String              @id @default(cuid())
+  requesterId String              // User requesting the service
+  providerId  String              // User providing the service
+  serviceType ServiceType
+  duration    Int                 // Duration in minutes
+  price       Float
+  currency    String              @default("KES")
+  status      ServiceRequestStatus @default(PENDING)
+  message     String?             // Optional message from requester
+  
+  // Timing
+  requestedAt DateTime            @default(now())
+  respondedAt DateTime?
+  
+  // Session management
+  sessionId   String?             @unique
+  session     ServiceSession?
+  
+  // Notifications
+  notifications ServiceNotification[]
+  
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([requesterId, status])
+  @@index([providerId, status])
+  @@index([status, createdAt])
+  @@map("service_requests")
+}
+
+model ServiceNotification {
+  id              String              @id @default(cuid())
+  userId          String              // User receiving notification
+  requestId       String
+  notificationType NotificationType
+  isRead          Boolean             @default(false)
+  readAt          DateTime?
+  
+  // Notification content
+  title           String
+  message         String
+  metadata        Json?               // Additional data
+  
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  
+  request         ServiceRequest      @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([requestId])
+  @@map("service_notifications")
+}
+
+model ServiceSession {
+  id          String              @id @default(cuid())
+  requestId   String              @unique
+  requesterId String
+  providerId  String
+  serviceType ServiceType
+  
+  // Session details
+  duration    Int                 // Allocated duration in minutes
+  price       Float
+  currency    String              @default("KES")
+  
+  // Session timing
+  startTime   DateTime
+  endTime     DateTime
+  actualStart DateTime?
+  actualEnd   DateTime?
+  usedMinutes Float               @default(0)
+  
+  // Session state
+  isActive    Boolean             @default(true)
+  isPaused    Boolean             @default(false)
+  isCompleted Boolean             @default(false)
+  lastActiveAt DateTime?
+  pausedAt    DateTime?
+  resumedAt   DateTime?
+  
+  // Payment tracking
+  isPaid      Boolean             @default(false)
+  paidAt      DateTime?
+  
+  // Connection info (for WebRTC, etc.)
+  connectionData Json?
+  
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  
+  request     ServiceRequest      @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requesterId, isActive])
+  @@index([providerId, isActive])
+  @@index([isActive, serviceType])
+  @@map("service_sessions")
+}
+
+model PendingBalance {
+  id              String              @id @default(cuid())
+  userId          String
+  amount          Float
+  currency        String              @default("KES")
+  status          PendingBalanceStatus @default(LOCKED)
+  
+  // Source tracking
+  sourceType      String              // "SERVICE_REQUEST", "REFUND", etc.
+  sourceId        String              // ID of service request or other source
+  
+  // Timing
+  lockedAt        DateTime            @default(now())
+  releasedAt      DateTime?
+  
+  // Notes
+  description     String?
+  metadata        Json?
+  
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@index([userId, status])
+  @@index([sourceType, sourceId])
+  @@index([status, createdAt])
+  @@map("pending_balances")
+}
+
+model ServiceTransaction {
+  id              String              @id @default(cuid())
+  userId          String
+  requestId       String?
+  sessionId       String?
+  transactionType ServiceTransactionType
+  amount          Float
+  currency        String              @default("KES")
+  
+  // Balance changes
+  previousBalance Float
+  newBalance      Float
+  
+  description     String
+  metadata        Json?
+  
+  createdAt       DateTime            @default(now())
+
+  @@index([userId, transactionType])
+  @@index([requestId])
+  @@index([sessionId])
+  @@map("service_transactions")
+}
+
+enum ServiceType {
+  CHAT
+  VIDEO
+  AUDIO
+}
+
+enum ServiceRequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  CANCELLED
+  COMPLETED
+}
+
+enum NotificationType {
+  SERVICE_REQUEST
+  REQUEST_ACCEPTED
+  REQUEST_REJECTED
+  REQUEST_EXPIRED
+  SESSION_STARTED
+  SESSION_ENDING
+  SESSION_ENDED
+  PAYMENT_RECEIVED
+  PAYMENT_PENDING
+}
+
+enum PendingBalanceStatus {
+  LOCKED
+  RELEASED
+  EXPIRED
+  REFUNDED
+}
+
+enum ServiceTransactionType {
+  PAYMENT
+  EARNING
+  REFUND
+  LOCK
+  RELEASE
+}
+
 enum MessageType {
   TEXT
   IMAGE
@@ -246,4 +504,18 @@ enum PaymentStatus {
   COMPLETED
   FAILED
   CANCELLED
+}
+
+enum B2CTransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  TIMEOUT
+  CANCELLED
+}
+
+enum B2CCommandType {
+  SalaryPayment
+  BusinessPayment
+  PromotionPayment
 }

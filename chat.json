@@ -1,0 +1,425 @@
+{
+  "info": {
+    "name": "Service Requests API",
+    "description": "API endpoints for chat, video, and audio service requests with Clerk authentication",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{clerkToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "clerkToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "providerId",
+      "value": "user_2abc123",
+      "type": "string"
+    },
+    {
+      "key": "requestId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "notificationId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Service Requests",
+      "item": [
+        {
+          "name": "Create Service Request",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{clerkToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"providerId\": \"{{providerId}}\",\n  \"serviceType\": \"CHAT\",\n  \"duration\": 30,\n  \"message\": \"Hi, I'd like to chat for 30 minutes\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/service-requests",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "service-requests"]
+            }
+          }
+        },
+        {
+          "name": "Create Video Request",
+          "request": {
+            "auth": {
+              "type": "inherit"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"providerId\": \"{{providerId}}\",\n  \"serviceType\": \"VIDEO\",\n  \"duration\": 60,\n  \"message\": \"Video call request\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/service-requests",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "service-requests"]
+            }
+          }
+        },
+        {
+          "name": "Create Audio Request",
+          "request": {
+            "auth": {
+              "type": "inherit"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"providerId\": \"{{providerId}}\",\n  \"serviceType\": \"AUDIO\",\n  \"duration\": 45,\n  \"message\": \"Audio call request\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/service-requests",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "service-requests"]
+            }
+          }
+        },
+        {
+          "name": "Accept Service Request",
+          "request": {
+            "auth": {
+              "type": "inherit"
+            },
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accept\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/service-requests/{{requestId}}/respond",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "service-requests", "{{requestId}}", "respond"]
+            }
+          }
+        },
+        {
+          "name": "Reject Service Request",
+          "request": {
+            "auth": {
+              "type": "inherit"
+            },
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accept\": false,\n  \"reason\": \"Not available at this time\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/service-requests/{{requestId}}/respond",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "service-requests", "{{requestId}}", "respond"]
+            }
+          }
+        },
+        {
+          "name": "Cancel Service Request",
+          "request": {
+            "auth": {
+              "type": "inherit"
+            },
+            "method": "PATCH",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/service-requests/{{requestId}}/cancel",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "service-requests", "{{requestId}}", "cancel"]
+            }
+          }
+        },
+        {
+          "name": "Get Pending Requests (Received)",
+          "request": {
+            "auth": {
+              "type": "inherit"
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/service-requests/pending/received",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "service-requests", "pending", "received"]
+            }
+          }
+        },
+        {
+          "name": "Get Sent Requests",
+          "request": {
+            "auth": {
+              "type": "inherit"
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/service-requests/sent",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "service-requests", "sent"]
+            }
+          }
+        },
+        {
+          "name": "Get Sent Requests (By Status)",
+          "request": {
+            "auth": {
+              "type": "inherit"
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/service-requests/sent?status=PENDING",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "service-requests", "sent"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "PENDING"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Notifications",
+      "item": [
+        {
+          "name": "Get All Notifications",
+          "request": {
+            "auth": {
+              "type": "inherit"
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/service-requests/notifications?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "service-requests", "notifications"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Unread Notifications",
+          "request": {
+            "auth": {
+              "type": "inherit"
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/service-requests/notifications?unreadOnly=true",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "service-requests", "notifications"],
+              "query": [
+                {
+                  "key": "unreadOnly",
+                  "value": "true"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Mark Notification as Read",
+          "request": {
+            "auth": {
+              "type": "inherit"
+            },
+            "method": "PATCH",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/service-requests/notifications/{{notificationId}}/read",
+              "host": ["{{baseUrl}}"],
+              "path": [
+                "api",
+                "v1",
+                "service-requests",
+                "notifications",
+                "{{notificationId}}",
+                "read"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Mark All Notifications as Read",
+          "request": {
+            "auth": {
+              "type": "inherit"
+            },
+            "method": "PATCH",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/service-requests/notifications/read-all",
+              "host": ["{{baseUrl}}"],
+              "path": [
+                "api",
+                "v1",
+                "service-requests",
+                "notifications",
+                "read-all"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Balance & Transactions",
+      "item": [
+        {
+          "name": "Get Pending Balance",
+          "request": {
+            "auth": {
+              "type": "inherit"
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/service-requests/balance/pending",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "service-requests", "balance", "pending"]
+            }
+          }
+        },
+        {
+          "name": "Get Transaction History",
+          "request": {
+            "auth": {
+              "type": "inherit"
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/service-requests/transactions?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "service-requests", "transactions"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Statistics",
+      "item": [
+        {
+          "name": "Get Requester Stats",
+          "request": {
+            "auth": {
+              "type": "inherit"
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/service-requests/stats/requester",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "service-requests", "stats", "requester"]
+            }
+          }
+        },
+        {
+          "name": "Get Provider Stats",
+          "request": {
+            "auth": {
+              "type": "inherit"
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/service-requests/stats/provider",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "service-requests", "stats", "provider"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "Expire Old Requests (Manual)",
+          "request": {
+            "auth": {
+              "type": "inherit"
+            },
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/service-requests/admin/expire-old",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "service-requests", "admin", "expire-old"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
