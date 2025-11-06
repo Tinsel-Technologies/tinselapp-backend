@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { MpesaCallbackDto, ProcessedCallback } from './dto/callback.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { PaymentStatus } from '@prisma/client';
+import { MpesaSecurityService } from './mpesa-security.service';
+import { ConfigService } from '@nestjs/config';
 
 interface AuthResponse {
   access_token: string;
@@ -78,8 +80,7 @@ export class PaymentService {
   private readonly consumerSecret =
     'C8fUfAAFWnm8vqt4MNSGGezj93u0CXDTGiqIV8DJqLX7uXB6huyyux7ODWwpKTOf';
   private readonly businessShortCode = '4186271';
-  private readonly initiatorName = 'Tinsel Technologies';
-  private readonly securityCredential = "MAn7SFxPP9wU90DaadtwZL5xmhBkkwTHqMmFQEoO+JIwKkx6KkEGP+9GMNlWzQeftGY7qZVADpbYL+T/IdMRBeYdcz5q/gXbx18CWyHj+TTIjRhKidgDNCed+bm9AWq1vQY2lTNRIjqzUqhN3Fv52NEN3xuIPiSIrnAuGRvhJRKj0NMEn9i6kS3s5xJSDbkwur2Xts0behP7cZgt0ZrxfWWq5PlpCkjd9jjzODrZG03/U/WegdnXjA8a5SrgQTttQIWxmkpuEk2yNgZKnRVbTUxcfCgU1zUepOYSd1gcPZ35S77+umd8+JWkv6HZwqIqSOawPQ1YlK9B0vvS2tB3tQ=="
+  private readonly initiatorName = 'GEOFREYTEGERE';
   private readonly b2cQueueTimeOutURL =
     'https://tinsel-backend-app-e9iwg.ondigitalocean.app/api/v1/pay/b2c-timeout';
   private readonly b2cResultURL =
@@ -87,7 +88,11 @@ export class PaymentService {
   private readonly passkey =
     '1e87335f6f6f0251c19c8eca632c425953d426c41b40ee4c31b68de5b665cdcb';
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly mpesaSecurityService: MpesaSecurityService, // This is the crucial line
+    private readonly configService: ConfigService,
+  ) {}
 
   async getAccessToken(): Promise<string | null> {
     const buffer = Buffer.from(`${this.consumerKey}:${this.consumerSecret}`);
@@ -366,23 +371,6 @@ export class PaymentService {
     }
   }
 
-  // async getPaymentHistory(phoneNumber?: string): Promise<any[]> {
-  //   try {
-  //     const payments = await this.prisma.payment.findMany({
-  //       where: phoneNumber
-  //         ? { phoneNumber: this.formatPhoneNumber(phoneNumber) }
-  //         : {},
-  //       include: { callback: true },
-  //       orderBy: { createdAt: 'desc' },
-  //     });
-
-  //     return payments;
-  //   } catch (error) {
-  //     console.error('Error fetching payment history:', error);
-  //     return [];
-  //   }
-  // }
-
   private formatPhoneNumber(phoneNumber: string): string {
     let cleaned = phoneNumber.replace(/[\s\-\+]/g, '');
     if (cleaned.startsWith('0')) {
@@ -406,11 +394,13 @@ export class PaymentService {
     } = paymentData;
 
     const formattedPhone = this.formatPhoneNumber(phoneNumber);
+    const securityCredential =
+      this.mpesaSecurityService.generateSecurityCredential();
 
     const b2cRequest: B2CRequest = {
       OriginatorConversationID: crypto.randomUUID(),
       InitiatorName: this.initiatorName,
-      SecurityCredential: this.securityCredential,
+      SecurityCredential: securityCredential,
       CommandID: 'SalaryPayment',
       Amount: amount,
       PartyA: this.businessShortCode,
@@ -529,9 +519,12 @@ export class PaymentService {
     transactionId: string,
     userId: string,
   ): Promise<any> {
+    const securityCredential =
+      this.mpesaSecurityService.generateSecurityCredential();
+
     const queryRequest = {
       Initiator: this.initiatorName,
-      SecurityCredential: this.securityCredential,
+      SecurityCredential: securityCredential,
       CommandID: 'TransactionStatusQuery',
       TransactionID: transactionId,
       PartyA: this.businessShortCode,
@@ -581,9 +574,12 @@ export class PaymentService {
   }
 
   async queryAccountBalance(userId: string): Promise<any> {
+    const securityCredential =
+      this.mpesaSecurityService.generateSecurityCredential();
+
     const balanceRequest = {
       Initiator: this.initiatorName,
-      SecurityCredential: this.securityCredential,
+      SecurityCredential: securityCredential,
       CommandID: 'AccountBalance',
       PartyA: this.businessShortCode,
       IdentifierType: '4',
@@ -642,11 +638,13 @@ export class PaymentService {
     } = paymentData;
 
     const formattedPhone = this.formatPhoneNumber(phoneNumber);
+    const securityCredential =
+      this.mpesaSecurityService.generateSecurityCredential();
 
     const b2cRequest: B2CRequest = {
       OriginatorConversationID: crypto.randomUUID(),
       InitiatorName: this.initiatorName,
-      SecurityCredential: this.securityCredential,
+      SecurityCredential: securityCredential,
       CommandID: 'BusinessPayment',
       Amount: amount,
       PartyA: this.businessShortCode,

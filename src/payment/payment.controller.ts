@@ -7,6 +7,7 @@ import {
   UseGuards,
   Req,
   Query,
+  Logger,
 } from '@nestjs/common';
 import { PaymentService, PaymentDto, B2CDto } from './payment.service';
 import { MpesaCallbackDto } from './dto/callback.dto';
@@ -15,7 +16,7 @@ import { AuthGuardService } from 'src/auth-guard/auth-guard.service';
 @Controller('api/v1/pay')
 export class PaymentController {
   constructor(private readonly paymentService: PaymentService) {}
-
+  private readonly logger = new Logger(PaymentController.name);
   @Post('mpesa')
   @UseGuards(AuthGuardService)
   async initiatePayment(@Body() paymentData: PaymentDto, @Req() req: Request) {
@@ -250,8 +251,8 @@ export class PaymentController {
   @Post('b2c-result')
   async handleB2CResult(@Body() resultData: any) {
     try {
-      console.log('Received B2C result:', JSON.stringify(resultData, null, 2));
-
+      this.logger.log('--- M-PESA B2C RESULT CALLBACK RECEIVED ---');
+    this.logger.log(JSON.stringify(resultData, null, 2));
       const processedResult =
         await this.paymentService.processB2CResult(resultData);
 

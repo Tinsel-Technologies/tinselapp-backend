@@ -449,7 +449,8 @@ export class ChatService {
     }
 
     if (!chatRoom.isActive) {
-      throw new BadRequestException('Chat room is already closed');
+      this.logger.log(`Chat room ${roomId} is already closed`);
+      return chatRoom;
     }
 
     const closedRoom = await this.prisma.chatRoom.update({
