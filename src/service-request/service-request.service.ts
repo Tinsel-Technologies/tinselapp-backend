@@ -45,7 +45,6 @@ export class ServiceRequestService {
       throw new BadRequestException('Service provider not available');
     }
 
-    // Get pricing based on service type
     let price = 0;
     if (dto.serviceType === 'CHAT') {
       const tier = providerSettings.chatTimeTiers.find(
@@ -56,12 +55,13 @@ export class ServiceRequestService {
       }
       price = tier.price;
     } else {
-      // For VIDEO/AUDIO, calculate based on duration
       const baseRate =
         dto.serviceType === 'VIDEO'
           ? providerSettings.videoPrice || 0
-          : providerSettings.voiceNotePrice || 0;
-      price = baseRate * dto.duration * 60; // Convert to seconds
+          : dto.serviceType === 'IMAGE'
+            ? providerSettings.imagePrice || 0
+            : providerSettings.voiceNotePrice || 0;
+      price = baseRate * dto.duration * 60;
     }
 
     // Check requester balance

@@ -453,6 +453,7 @@ enum ServiceType {
   CHAT
   VIDEO
   AUDIO
+  IMAGE
 }
 
 enum ServiceRequestStatus {
