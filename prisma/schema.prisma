@@ -265,13 +265,12 @@ model B2CTransaction {
   @@map("b2c_transactions")
 }
 
-// Transaction Status Query Model (optional - for tracking status queries)
 model TransactionStatusQuery {
   id               String   @id @default(cuid())
-  userId           String   // Clerk userId
-  transactionId    String   // Original M-Pesa transaction ID
+  userId           String   
+  transactionId    String  
   conversationId   String?
-  queryResponse    Json?    // Store the full response
+  queryResponse    Json?    
   status           String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
@@ -281,7 +280,6 @@ model TransactionStatusQuery {
   @@map("transaction_status_queries")
 }
 
-// Account Balance Query Model (optional - for tracking balance queries)
 model AccountBalanceQuery {
   id               String   @id @default(cuid())
   userId           String   // Clerk userId (admin who queried)
@@ -404,15 +402,12 @@ model PendingBalance {
   currency        String              @default("KES")
   status          PendingBalanceStatus @default(LOCKED)
   
-  // Source tracking
   sourceType      String              // "SERVICE_REQUEST", "REFUND", etc.
   sourceId        String              // ID of service request or other source
   
-  // Timing
   lockedAt        DateTime            @default(now())
   releasedAt      DateTime?
   
-  // Notes
   description     String?
   metadata        Json?
   
@@ -434,7 +429,6 @@ model ServiceTransaction {
   amount          Float
   currency        String              @default("KES")
   
-  // Balance changes
   previousBalance Float
   newBalance      Float
   

@@ -61,10 +61,9 @@ export class ServiceRequestService {
           : dto.serviceType === 'IMAGE'
             ? providerSettings.imagePrice || 0
             : providerSettings.voiceNotePrice || 0;
-      price = baseRate * dto.duration * 60;
+      price = baseRate;
     }
 
-    // Check requester balance
     const requesterBalance = await this.prisma.userBalance.findUnique({
       where: { userId: requesterId },
     });
@@ -77,7 +76,7 @@ export class ServiceRequestService {
 
     try {
       const result = await this.prisma.$transaction(async (tx) => {
-        // Create service request
+
         const request = await tx.serviceRequest.create({
           data: {
             requesterId,
@@ -90,7 +89,6 @@ export class ServiceRequestService {
           },
         });
 
-        // Lock funds in pending balance
         await tx.pendingBalance.create({
           data: {
             userId: requesterId,
@@ -103,7 +101,6 @@ export class ServiceRequestService {
           },
         });
 
-        // Deduct from available balance and add to pending
         await tx.userBalance.update({
           where: { userId: requesterId },
           data: {
@@ -112,7 +109,6 @@ export class ServiceRequestService {
           },
         });
 
-        // Record transaction
         const currentBalance = await tx.userBalance.findUnique({
           where: { userId: requesterId },
         });
@@ -135,7 +131,6 @@ export class ServiceRequestService {
           },
         });
 
-        // Create notification for provider
         await tx.serviceNotification.create({
           data: {
             userId: dto.providerId,
