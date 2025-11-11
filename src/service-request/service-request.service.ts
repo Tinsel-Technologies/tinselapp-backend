@@ -67,7 +67,7 @@ export class ServiceRequestService {
         dto.serviceType === 'VIDEO'
           ? providerSettings.videoPrice || 0
           : providerSettings.voiceNotePrice || 0;
-      price = baseRate * dto.duration! * 60;
+      price = baseRate * dto.duration!;
     } else if (dto.serviceType === 'IMAGE') {
       const baseRate = providerSettings.imagePrice || 0;
       price = baseRate;
