@@ -11,7 +11,7 @@ import { ServiceType, ServiceRequestStatus } from '@prisma/client';
 interface CreateServiceRequestDto {
   providerId: string;
   serviceType: ServiceType;
-  duration: number;
+  duration?: number;
   message?: string;
 }
 
@@ -35,6 +35,12 @@ export class ServiceRequestService {
       throw new BadRequestException('Cannot request service from yourself');
     }
 
+    if (dto.serviceType !== 'IMAGE' && (!dto.duration || dto.duration <= 0)) {
+      throw new BadRequestException(
+        'Duration is required for this service type',
+      );
+    }
+
     const providerSettings =
       await this.prisma.userMonetizationSettings.findUnique({
         where: { userId: dto.providerId },
@@ -46,6 +52,8 @@ export class ServiceRequestService {
     }
 
     let price = 0;
+    let duration = dto.duration || 0;
+
     if (dto.serviceType === 'CHAT') {
       const tier = providerSettings.chatTimeTiers.find(
         (t) => t.durationMinutes === dto.duration && t.isActive,
@@ -54,14 +62,16 @@ export class ServiceRequestService {
         throw new BadRequestException(`No pricing for ${dto.duration} minutes`);
       }
       price = tier.price;
-    } else {
+    } else if (dto.serviceType === 'VIDEO' || dto.serviceType === 'AUDIO') {
       const baseRate =
         dto.serviceType === 'VIDEO'
           ? providerSettings.videoPrice || 0
-          : dto.serviceType === 'IMAGE'
-            ? providerSettings.imagePrice || 0
-            : providerSettings.voiceNotePrice || 0;
+          : providerSettings.voiceNotePrice || 0;
+      price = baseRate * dto.duration!;
+    } else if (dto.serviceType === 'IMAGE') {
+      const baseRate = providerSettings.imagePrice || 0;
       price = baseRate;
+      duration = 1;
     }
 
     const requesterBalance = await this.prisma.userBalance.findUnique({
@@ -76,13 +86,12 @@ export class ServiceRequestService {
 
     try {
       const result = await this.prisma.$transaction(async (tx) => {
-
         const request = await tx.serviceRequest.create({
           data: {
             requesterId,
             providerId: dto.providerId,
             serviceType: dto.serviceType,
-            duration: dto.duration,
+            duration,
             price,
             currency: providerSettings.currency,
             message: dto.message,
@@ -125,11 +134,17 @@ export class ServiceRequestService {
             description: `Locked ${price} for ${dto.serviceType} request`,
             metadata: {
               serviceType: dto.serviceType,
-              duration: dto.duration,
+              duration,
               providerId: dto.providerId,
             },
           },
         });
+
+        const notificationMessage =
+          dto.serviceType === 'IMAGE'
+            ? `User wants to request an image`
+            : dto.message ||
+              `User wants to ${dto.serviceType.toLowerCase()} for ${duration} minutes`;
 
         await tx.serviceNotification.create({
           data: {
@@ -137,13 +152,11 @@ export class ServiceRequestService {
             requestId: request.id,
             notificationType: 'SERVICE_REQUEST',
             title: `New ${dto.serviceType} Request`,
-            message:
-              dto.message ||
-              `User wants to ${dto.serviceType.toLowerCase()} for ${dto.duration} minutes`,
+            message: notificationMessage,
             metadata: {
               requesterId,
               serviceType: dto.serviceType,
-              duration: dto.duration,
+              duration,
               price,
             },
           },
@@ -188,7 +201,6 @@ export class ServiceRequestService {
       throw new BadRequestException('Request already processed');
     }
 
-    // Check if request is older than 7 days
     const weekAgo = new Date();
     weekAgo.setDate(weekAgo.getDate() - this.EXPIRATION_DAYS);
 
@@ -211,7 +223,6 @@ export class ServiceRequestService {
 
   private async acceptRequest(request: any) {
     const result = await this.prisma.$transaction(async (tx) => {
-      // Update request status
       const updatedRequest = await tx.serviceRequest.update({
         where: { id: request.id },
         data: {
@@ -220,7 +231,6 @@ export class ServiceRequestService {
         },
       });
 
-      // Release pending balance to provider
       const pendingBalance = await tx.pendingBalance.findFirst({
         where: {
           userId: request.requesterId,
@@ -238,7 +248,6 @@ export class ServiceRequestService {
           },
         });
 
-        // Update requester balance
         const requesterBalance = await tx.userBalance.findUnique({
           where: { userId: request.requesterId },
         });
@@ -250,7 +259,6 @@ export class ServiceRequestService {
           },
         });
 
-        // Record transaction for requester
         await tx.serviceTransaction.create({
           data: {
             userId: request.requesterId,
@@ -260,7 +268,7 @@ export class ServiceRequestService {
             currency: request.currency,
             previousBalance: requesterBalance!.availableBalance,
             newBalance: requesterBalance!.availableBalance,
-            description: `Payment for ${request.serviceType} session`,
+            description: `Payment for ${request.serviceType} ${request.serviceType === 'IMAGE' ? 'request' : 'session'}`,
           },
         });
 
@@ -282,7 +290,6 @@ export class ServiceRequestService {
           },
         });
 
-        // Record transaction for provider
         const newProviderBalance = await tx.userBalance.findUnique({
           where: { userId: request.providerId },
         });
@@ -296,14 +303,16 @@ export class ServiceRequestService {
             currency: request.currency,
             previousBalance: providerBalance?.availableBalance || 0,
             newBalance: newProviderBalance!.availableBalance,
-            description: `Earned from ${request.serviceType} session`,
+            description: `Earned from ${request.serviceType} ${request.serviceType === 'IMAGE' ? 'request' : 'session'}`,
           },
         });
       }
 
-      // Create service session
       const startTime = new Date();
-      const endTime = new Date(startTime.getTime() + request.duration * 60000);
+      const endTime =
+        request.serviceType === 'IMAGE'
+          ? new Date(startTime.getTime() + 1000) 
+          : new Date(startTime.getTime() + request.duration * 60000);
 
       const session = await tx.serviceSession.create({
         data: {
@@ -321,7 +330,6 @@ export class ServiceRequestService {
         },
       });
 
-      // Notify requester
       await tx.serviceNotification.create({
         data: {
           userId: request.requesterId,
@@ -333,14 +341,19 @@ export class ServiceRequestService {
         },
       });
 
-      // Notify provider
       await tx.serviceNotification.create({
         data: {
           userId: request.providerId,
           requestId: request.id,
           notificationType: 'SESSION_STARTED',
-          title: 'Session Started',
-          message: `${request.serviceType} session has started`,
+          title:
+            request.serviceType === 'IMAGE'
+              ? 'Image Request Accepted'
+              : 'Session Started',
+          message:
+            request.serviceType === 'IMAGE'
+              ? 'You can now send the requested image'
+              : `${request.serviceType} session has started`,
           metadata: { sessionId: session.id },
         },
       });
@@ -361,7 +374,6 @@ export class ServiceRequestService {
 
   private async rejectRequest(request: any, reason?: string) {
     const result = await this.prisma.$transaction(async (tx) => {
-      // Update request
       const updatedRequest = await tx.serviceRequest.update({
         where: { id: request.id },
         data: {
@@ -370,7 +382,6 @@ export class ServiceRequestService {
         },
       });
 
-      // Refund locked balance
       const pendingBalance = await tx.pendingBalance.findFirst({
         where: {
           userId: request.requesterId,
@@ -400,7 +411,6 @@ export class ServiceRequestService {
           },
         });
 
-        // Record refund transaction
         const newBalance = await tx.userBalance.findUnique({
           where: { userId: request.requesterId },
         });
@@ -419,7 +429,6 @@ export class ServiceRequestService {
         });
       }
 
-      // Notify requester
       await tx.serviceNotification.create({
         data: {
           userId: request.requesterId,
@@ -458,7 +467,6 @@ export class ServiceRequestService {
         },
       });
 
-      // Refund locked balance
       const pendingBalance = await tx.pendingBalance.findFirst({
         where: {
           userId: request.requesterId,
@@ -488,7 +496,6 @@ export class ServiceRequestService {
           },
         });
 
-        // Record refund transaction
         const newBalance = await tx.userBalance.findUnique({
           where: { userId: request.requesterId },
         });
@@ -507,7 +514,6 @@ export class ServiceRequestService {
         });
       }
 
-      // Notify both parties
       await tx.serviceNotification.createMany({
         data: [
           {
@@ -548,84 +554,88 @@ export class ServiceRequestService {
       throw new BadRequestException('Can only cancel pending requests');
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.serviceRequest.update({
-        where: { id: requestId },
-        data: {
-          status: 'CANCELLED',
-          respondedAt: new Date(),
-        },
-      });
-
-      // Refund locked balance
-      const pendingBalance = await tx.pendingBalance.findFirst({
-        where: {
-          userId: requesterId,
-          sourceId: requestId,
-          status: 'LOCKED',
-        },
-      });
-
-      if (pendingBalance) {
-        await tx.pendingBalance.update({
-          where: { id: pendingBalance.id },
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.serviceRequest.update({
+          where: { id: requestId },
           data: {
-            status: 'REFUNDED',
-            releasedAt: new Date(),
+            status: 'CANCELLED',
+            respondedAt: new Date(),
           },
         });
 
-        const requesterBalance = await tx.userBalance.findUnique({
-          where: { userId: requesterId },
-        });
-
-        await tx.userBalance.update({
-          where: { userId: requesterId },
-          data: {
-            availableBalance: { increment: request.price },
-            pendingBalance: { decrement: request.price },
-          },
-        });
-
-        const newBalance = await tx.userBalance.findUnique({
-          where: { userId: requesterId },
-        });
-
-        await tx.serviceTransaction.create({
-          data: {
+        const pendingBalance = await tx.pendingBalance.findFirst({
+          where: {
             userId: requesterId,
-            requestId: request.id,
-            transactionType: 'REFUND',
-            amount: request.price,
-            currency: request.currency,
-            previousBalance: requesterBalance!.availableBalance,
-            newBalance: newBalance!.availableBalance,
-            description: `Refund for cancelled ${request.serviceType} request`,
+            sourceId: requestId,
+            status: 'LOCKED',
           },
         });
-      }
 
-      // Notify provider
-      await tx.serviceNotification.create({
-        data: {
-          userId: request.providerId,
-          requestId,
-          notificationType: 'REQUEST_EXPIRED',
-          title: 'Request Cancelled',
-          message: 'User cancelled their service request',
-        },
+        if (pendingBalance) {
+          await tx.pendingBalance.update({
+            where: { id: pendingBalance.id },
+            data: {
+              status: 'REFUNDED',
+              releasedAt: new Date(),
+            },
+          });
+
+          const requesterBalance = await tx.userBalance.findUnique({
+            where: { userId: requesterId },
+          });
+
+          if (requesterBalance) {
+            await tx.userBalance.update({
+              where: { userId: requesterId },
+              data: {
+                availableBalance: { increment: request.price },
+                pendingBalance: { decrement: request.price },
+              },
+            });
+
+            const newBalance = await tx.userBalance.findUnique({
+              where: { userId: requesterId },
+            });
+
+            await tx.serviceTransaction.create({
+              data: {
+                userId: requesterId,
+                requestId: request.id,
+                transactionType: 'REFUND',
+                amount: request.price,
+                currency: request.currency,
+                previousBalance: requesterBalance.availableBalance,
+                newBalance: newBalance!.availableBalance,
+                description: `Refund for cancelled ${request.serviceType} request`,
+              },
+            });
+          }
+        }
+
+        await tx.serviceNotification.create({
+          data: {
+            userId: request.providerId,
+            requestId,
+            notificationType: 'REQUEST_REJECTED', 
+            title: 'Request Cancelled',
+            message: `User cancelled their ${request.serviceType} request`,
+          },
+        });
       });
-    });
 
-    this.logger.log(`Request cancelled by user: ${requestId}`);
+      this.logger.log(`Request cancelled by user: ${requestId}`);
 
-    return {
-      success: true,
-      message: 'Request cancelled successfully',
-    };
+      return {
+        success: true,
+        message: 'Request cancelled successfully',
+      };
+    } catch (error) {
+      this.logger.error('Error cancelling request:', error);
+      throw new BadRequestException('Failed to cancel request');
+    }
   }
 
-  // Get user's notifications
   async getNotifications(
     userId: string,
     unreadOnly: boolean = false,
