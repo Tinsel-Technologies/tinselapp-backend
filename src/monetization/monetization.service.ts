@@ -935,14 +935,11 @@ export class MonetizationService {
     }
   }
 
-  /**
-   * Update user's monetization settings (partial update)
-   */
+
   async updateMonetizationSettings(
     userId: string,
     dto: UpdateMonetizationSettingsDto,
   ) {
-    // Check if settings exist
     const existingSettings =
       await this.prisma.userMonetizationSettings.findUnique({
         where: { userId },
@@ -955,7 +952,6 @@ export class MonetizationService {
       );
     }
 
-    // Validate: if enabling, ensure chat time tiers exist or are provided
     if (dto.isEnabled === true) {
       const hasTiers =
         (dto.chatTimeTiers && dto.chatTimeTiers.length > 0) ||
@@ -968,7 +964,6 @@ export class MonetizationService {
       }
     }
 
-    // Validate tiers if provided
     if (dto.chatTimeTiers) {
       for (const tier of dto.chatTimeTiers) {
         if (tier.price <= 0) {
@@ -979,7 +974,6 @@ export class MonetizationService {
       }
     }
 
-    // Validate optional media charges
     if (
       dto.monetizeVoiceNotes === true &&
       dto.voiceNotePrice !== undefined &&
@@ -1009,7 +1003,6 @@ export class MonetizationService {
     }
 
     try {
-      // Build update data (only include provided fields)
       const updateData: any = {};
 
       if (dto.isEnabled !== undefined) updateData.isEnabled = dto.isEnabled;
@@ -1024,20 +1017,16 @@ export class MonetizationService {
       if (dto.monetizeVideos !== undefined)
         updateData.monetizeVideos = dto.monetizeVideos;
 
-      // Update settings
       const settings = await this.prisma.userMonetizationSettings.update({
         where: { userId },
         data: updateData,
       });
 
-      // Handle chat time tiers if provided
       if (dto.chatTimeTiers && dto.chatTimeTiers.length > 0) {
-        // Delete existing tiers
         await this.prisma.chatTimeTier.deleteMany({
           where: { settingsId: settings.id },
         });
 
-        // Create new tiers
         await this.prisma.chatTimeTier.createMany({
           data: dto.chatTimeTiers.map((tier) => ({
             settingsId: settings.id,

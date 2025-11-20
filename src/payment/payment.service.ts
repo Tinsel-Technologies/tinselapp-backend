@@ -87,6 +87,7 @@ export class PaymentService {
     'https://tinsel-backend-app-e9iwg.ondigitalocean.app/api/v1/pay/b2c-result';
   private readonly passkey =
     '1e87335f6f6f0251c19c8eca632c425953d426c41b40ee4c31b68de5b665cdcb';
+  private readonly password = 'Tin@105117';
 
   constructor(
     private prisma: PrismaService,
@@ -395,7 +396,7 @@ export class PaymentService {
 
     const formattedPhone = this.formatPhoneNumber(phoneNumber);
     const securityCredential =
-      this.mpesaSecurityService.generateSecurityCredential();
+      this.mpesaSecurityService.generateSecurityCredential(this.password);
 
     const b2cRequest: B2CRequest = {
       OriginatorConversationID: crypto.randomUUID(),
@@ -520,7 +521,7 @@ export class PaymentService {
     userId: string,
   ): Promise<any> {
     const securityCredential =
-      this.mpesaSecurityService.generateSecurityCredential();
+      this.mpesaSecurityService.generateSecurityCredential(this.password);
 
     const queryRequest = {
       Initiator: this.initiatorName,

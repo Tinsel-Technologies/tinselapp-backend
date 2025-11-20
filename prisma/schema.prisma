@@ -282,13 +282,13 @@ model TransactionStatusQuery {
 
 model AccountBalanceQuery {
   id               String   @id @default(cuid())
-  userId           String   // Clerk userId (admin who queried)
+  userId           String  
   conversationId   String?
   workingBalance   Float?
   utilityBalance   Float?   
   chargesPaidBalance Float?
   unClearedBalance Float?
-  queryResponse    Json?    // Store the full response
+  queryResponse    Json?   
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -298,24 +298,21 @@ model AccountBalanceQuery {
 
 model ServiceRequest {
   id          String              @id @default(cuid())
-  requesterId String              // User requesting the service
-  providerId  String              // User providing the service
+  requesterId String             
+  providerId  String             
   serviceType ServiceType
-  duration    Int                 // Duration in minutes
+  duration    Int                 
   price       Float
   currency    String              @default("KES")
   status      ServiceRequestStatus @default(PENDING)
-  message     String?             // Optional message from requester
+  message     String?           
   
-  // Timing
   requestedAt DateTime            @default(now())
   respondedAt DateTime?
   
-  // Session management
   sessionId   String?             @unique
   session     ServiceSession?
   
-  // Notifications
   notifications ServiceNotification[]
   
   createdAt   DateTime            @default(now())
@@ -329,16 +326,15 @@ model ServiceRequest {
 
 model ServiceNotification {
   id              String              @id @default(cuid())
-  userId          String              // User receiving notification
+  userId          String             
   requestId       String
   notificationType NotificationType
   isRead          Boolean             @default(false)
   readAt          DateTime?
   
-  // Notification content
   title           String
   message         String
-  metadata        Json?               // Additional data
+  metadata        Json?               
   
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
@@ -357,19 +353,16 @@ model ServiceSession {
   providerId  String
   serviceType ServiceType
   
-  // Session details
-  duration    Int                 // Allocated duration in minutes
+  duration    Int                
   price       Float
   currency    String              @default("KES")
   
-  // Session timing
   startTime   DateTime
   endTime     DateTime
   actualStart DateTime?
   actualEnd   DateTime?
   usedMinutes Float               @default(0)
   
-  // Session state
   isActive    Boolean             @default(true)
   isPaused    Boolean             @default(false)
   isCompleted Boolean             @default(false)
@@ -377,11 +370,9 @@ model ServiceSession {
   pausedAt    DateTime?
   resumedAt   DateTime?
   
-  // Payment tracking
   isPaid      Boolean             @default(false)
   paidAt      DateTime?
   
-  // Connection info (for WebRTC, etc.)
   connectionData Json?
   
   createdAt   DateTime            @default(now())
@@ -402,8 +393,8 @@ model PendingBalance {
   currency        String              @default("KES")
   status          PendingBalanceStatus @default(LOCKED)
   
-  sourceType      String              // "SERVICE_REQUEST", "REFUND", etc.
-  sourceId        String              // ID of service request or other source
+  sourceType      String              
+  sourceId        String              
   
   lockedAt        DateTime            @default(now())
   releasedAt      DateTime?
