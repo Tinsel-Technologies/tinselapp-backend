@@ -77,16 +77,23 @@ export class PaymentService {
 
   private readonly consumerKey =
     'j2dniwbVn7G35PimKt4RAzifEhXMsuGXK6kqpPjnurgxikFB';
+
   private readonly consumerSecret =
     'C8fUfAAFWnm8vqt4MNSGGezj93u0CXDTGiqIV8DJqLX7uXB6huyyux7ODWwpKTOf';
+
   private readonly businessShortCode = '4186271';
+
   private readonly initiatorName = 'GEOFREYTEGERET';
+
   private readonly b2cQueueTimeOutURL =
     'https://tinsel-backend-app-e9iwg.ondigitalocean.app/api/v1/pay/b2c-timeout';
+
   private readonly b2cResultURL =
     'https://tinsel-backend-app-e9iwg.ondigitalocean.app/api/v1/pay/b2c-result';
+
   private readonly passkey =
     '1e87335f6f6f0251c19c8eca632c425953d426c41b40ee4c31b68de5b665cdcb';
+
   private readonly password = 'Tin@105117';
 
   constructor(
