@@ -83,7 +83,7 @@ export class PaymentService {
 
   private readonly businessShortCode = '4186271';
 
-  private readonly initiatorName = 'GEOFREYTEGERET';
+  private readonly initiatorName = 'GEOFREY TEGERET';
 
   private readonly b2cQueueTimeOutURL =
     'https://tinsel-backend-app-e9iwg.ondigitalocean.app/api/v1/pay/b2c-timeout';
